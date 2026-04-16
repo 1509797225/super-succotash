@@ -2,6 +2,8 @@
 
 `JellyTodo` 是一个基于 `SwiftUI + MVVM + UserDefaults + Codable` 的 iOS 16+ 极简待办应用。
 
+GitHub 仓库：`1509797225/super-succotash`
+
 ## 打开方式
 
 1. 使用 Xcode 打开 `/Users/zhang/Desktop/codehub/code1/JellyTodo.xcodeproj`
