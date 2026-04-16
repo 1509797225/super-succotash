@@ -326,9 +326,10 @@ final class AppStore: ObservableObject {
 
 技术实现建议：
 
-- 列表使用 `ScrollView + LazyVStack`
-- 左滑采用自定义 `DragGesture` 卡片位移，不依赖 `List` 专用的系统 `swipeActions`
-- 为了保持灰白视觉，操作按钮自定义为浅灰底、深灰字
+- 任务列表使用 iOS 原生 `List`
+- 单行左滑采用内嵌横向 `ScrollView` 露出右侧操作区，不在行内挂自定义 `DragGesture`，避免再次破坏竖向滚动
+- `List` 必须隐藏系统分割线和默认背景，通过透明 row background 保留 Jelly 卡片视觉
+- 左滑展开后的 UI 必须保持自定义果冻胶囊按钮，不使用系统默认矩形 `swipeActions` 外观
 
 ### 9.1.1 任务详情二级页
 
@@ -498,6 +499,13 @@ MVP 行为：
 ```swift
 shadow(color: .white.opacity(0.8), radius: 4, x: -2, y: -2)
 shadow(color: .black.opacity(0.1), radius: 6, x: 2, y: 2)
+```
+
+Todo Item 使用更轻的列表阴影，阴影主要向下扩散，避免四个圆角出现明显黑边：
+
+```swift
+shadow(color: .white.opacity(0.55), radius: 1, x: 0, y: -1)
+shadow(color: .black.opacity(0.045), radius: 9, x: 0, y: 4)
 ```
 
 ### 10.2 任务卡片组件
@@ -693,16 +701,16 @@ UI 说明：
 
 ### 12.1 果冻感实现
 
-统一封装 `JellyCardModifier`：
+统一封装 `JellyCardModifier`，并按场景区分 `standard` 与 `listItem` 阴影：
 
 ```swift
 struct JellyCardModifier: ViewModifier {
+    let shadowStyle: JellyShadowStyle
+
     func body(content: Content) -> some View {
         content
             .background(Color(hex: "#F5F5F7"))
             .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
-            .shadow(color: .white.opacity(0.8), radius: 4, x: -2, y: -2)
-            .shadow(color: .black.opacity(0.1), radius: 6, x: 2, y: 2)
     }
 }
 ```

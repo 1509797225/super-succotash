@@ -11,33 +11,41 @@ struct TodayView: View {
             ThemeTokens.background(for: store.settings.themeMode)
                 .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: ThemeTokens.Metrics.sectionSpacing) {
-                    if store.todayTodos.isEmpty {
-                        Text("Today is clear")
-                            .font(ThemeTokens.Typography.sectionTitle)
-                            .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                            .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)
-                    } else {
-                        LazyVStack(spacing: ThemeTokens.Metrics.cardSpacing) {
-                            ForEach(Array(store.todayTodos.enumerated()), id: \.element.id) { offset, todo in
-                                TodoRow(index: offset + 1, item: todo) {
-                                    detailTodoID = todo.id
-                                } onLongPress: {
-                                    store.toggleTodoCompleted(id: todo.id)
-                                } onEdit: {
-                                    editingTodo = todo
-                                } onDelete: {
-                                    store.deleteTodo(id: todo.id)
-                                }
-                            }
+            List {
+                if store.todayTodos.isEmpty {
+                    Text("Today is clear")
+                        .font(ThemeTokens.Typography.sectionTitle)
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)
+                        .listRowInsets(rowInsets(top: 24, bottom: 0))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(Array(store.todayTodos.enumerated()), id: \.element.id) { offset, todo in
+                        TodoRow(index: offset + 1, item: todo) {
+                            detailTodoID = todo.id
+                        } onLongPress: {
+                            store.toggleTodoCompleted(id: todo.id)
+                        } onEdit: {
+                            editingTodo = todo
+                        } onDelete: {
+                            store.deleteTodo(id: todo.id)
                         }
+                        .listRowInsets(rowInsets(top: offset == 0 ? 24 : 0))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                     }
                 }
-                .padding(.horizontal, ThemeTokens.Metrics.horizontalPadding)
-                .padding(.top, 24)
-                .padding(.bottom, 110)
+
+                Color.clear
+                    .frame(height: 90)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 0)
 
             CapsuleButton(title: "New Task", minWidth: 120) {
                 showingNewTask = true
@@ -82,5 +90,14 @@ struct TodayView: View {
                 store.updateTodo(id: todo.id, title: text)
             }
         }
+    }
+
+    private func rowInsets(top: CGFloat = 0, bottom: CGFloat = ThemeTokens.Metrics.cardSpacing) -> EdgeInsets {
+        EdgeInsets(
+            top: top,
+            leading: ThemeTokens.Metrics.horizontalPadding,
+            bottom: bottom,
+            trailing: ThemeTokens.Metrics.horizontalPadding
+        )
     }
 }

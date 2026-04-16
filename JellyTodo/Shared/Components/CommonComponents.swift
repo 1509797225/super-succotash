@@ -1,25 +1,52 @@
 import SwiftUI
 
+enum JellyShadowStyle {
+    case standard
+    case listItem
+}
+
 struct JellyCardModifier: ViewModifier {
+    let shadowStyle: JellyShadowStyle
+
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius, style: .continuous)
+
         content
-            .background(ThemeTokens.Colors.card)
-            .clipShape(RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius, style: .continuous))
-            .shadow(color: .white.opacity(0.8), radius: 4, x: -2, y: -2)
-            .shadow(color: .black.opacity(0.1), radius: 6, x: 2, y: 2)
+            .clipShape(shape)
+            .background(
+                cardBackground(shape: shape)
+            )
+    }
+
+    @ViewBuilder
+    private func cardBackground(shape: RoundedRectangle) -> some View {
+        switch shadowStyle {
+        case .standard:
+            shape
+                .fill(ThemeTokens.Colors.card)
+                .shadow(color: .white.opacity(0.75), radius: 3, x: -1, y: -1)
+                .shadow(color: .black.opacity(0.08), radius: 5, x: 2, y: 2)
+        case .listItem:
+            shape
+                .fill(ThemeTokens.Colors.card)
+                .shadow(color: .white.opacity(0.55), radius: 1, x: 0, y: -1)
+                .shadow(color: .black.opacity(0.045), radius: 9, x: 0, y: 4)
+        }
     }
 }
 
 struct JellyCard<Content: View>: View {
     let content: Content
+    let shadowStyle: JellyShadowStyle
 
-    init(@ViewBuilder content: () -> Content) {
+    init(shadowStyle: JellyShadowStyle = .standard, @ViewBuilder content: () -> Content) {
+        self.shadowStyle = shadowStyle
         self.content = content()
     }
 
     var body: some View {
         content
-            .modifier(JellyCardModifier())
+            .modifier(JellyCardModifier(shadowStyle: shadowStyle))
     }
 }
 
