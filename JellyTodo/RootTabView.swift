@@ -7,6 +7,7 @@ private enum AppTab: Hashable {
 }
 
 struct RootTabView: View {
+    @Environment(\.appThemeMode) private var themeMode
     @State private var selectedTab: AppTab = .today
 
     var body: some View {
@@ -35,6 +36,6 @@ struct RootTabView: View {
             }
             .tag(AppTab.set)
         }
-        .tint(ThemeTokens.Colors.textPrimary)
+        .tint(ThemeTokens.accent(for: themeMode))
     }
 }

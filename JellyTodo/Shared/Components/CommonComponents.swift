@@ -6,6 +6,8 @@ enum JellyShadowStyle {
 }
 
 struct JellyCardModifier: ViewModifier {
+    @Environment(\.appThemeMode) private var themeMode
+
     let shadowStyle: JellyShadowStyle
 
     func body(content: Content) -> some View {
@@ -23,12 +25,12 @@ struct JellyCardModifier: ViewModifier {
         switch shadowStyle {
         case .standard:
             shape
-                .fill(ThemeTokens.Colors.card)
+                .fill(ThemeTokens.card(for: themeMode))
                 .shadow(color: .white.opacity(0.75), radius: 3, x: -1, y: -1)
                 .shadow(color: .black.opacity(0.08), radius: 5, x: 2, y: 2)
         case .listItem:
             shape
-                .fill(ThemeTokens.Colors.card)
+                .fill(ThemeTokens.card(for: themeMode))
                 .shadow(color: .white.opacity(0.55), radius: 1, x: 0, y: -1)
                 .shadow(color: .black.opacity(0.045), radius: 9, x: 0, y: 4)
         }
@@ -76,8 +78,10 @@ struct SectionCard<Content: View>: View {
 }
 
 struct CapsuleButton: View {
+    @Environment(\.appThemeMode) private var themeMode
+
     let title: String
-    var fill: Color = ThemeTokens.Colors.card
+    var fill: Color? = nil
     var foreground: Color = ThemeTokens.Colors.textPrimary
     var minWidth: CGFloat? = nil
     let action: () -> Void
@@ -90,7 +94,7 @@ struct CapsuleButton: View {
                 .frame(minWidth: minWidth)
                 .frame(height: ThemeTokens.Metrics.controlHeight)
                 .padding(.horizontal, 24)
-                .background(fill)
+                .background(fill ?? ThemeTokens.card(for: themeMode))
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -99,6 +103,8 @@ struct CapsuleButton: View {
 }
 
 struct BottomSheetContainer<Content: View>: View {
+    @Environment(\.appThemeMode) private var themeMode
+
     let title: String
     let content: Content
 
@@ -122,7 +128,7 @@ struct BottomSheetContainer<Content: View>: View {
         }
         .padding(.horizontal, 20)
         .padding(.bottom, 24)
-        .background(ThemeTokens.Colors.backgroundPrimary)
+        .background(ThemeTokens.background(for: themeMode))
     }
 }
 

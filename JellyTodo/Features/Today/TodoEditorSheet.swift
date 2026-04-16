@@ -6,6 +6,7 @@ struct TodoEditorSheet: View {
     let confirmTitle: String
     let onConfirm: (String) -> Void
 
+    @Environment(\.appThemeMode) private var themeMode
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
 
@@ -25,7 +26,7 @@ struct TodoEditorSheet: View {
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .padding(.horizontal, 20)
                     .frame(height: ThemeTokens.Metrics.controlHeight)
-                    .background(ThemeTokens.Colors.card)
+                    .background(ThemeTokens.card(for: themeMode))
                     .clipShape(Capsule())
 
                 HStack(spacing: 16) {

@@ -29,12 +29,16 @@ struct MonthView: View {
                             .listRowBackground(Color.clear)
 
                         ForEach(Array(section.items.enumerated()), id: \.element.id) { offset, todo in
-                            TodoRow(index: offset + 1, item: todo) {
+                            TodoRow(index: offset + 1, item: todo, themeMode: store.settings.themeMode) {
                                 store.toggleTodoCompleted(id: todo.id)
                             } onEdit: {
                                 editingTodo = todo
                             } onDelete: {
                                 store.deleteTodo(id: todo.id)
+                            } onSwipeComplete: {
+                                if !todo.isCompleted {
+                                    store.toggleTodoCompleted(id: todo.id)
+                                }
                             }
                             .listRowInsets(rowInsets(top: 0))
                             .listRowSeparator(.hidden)

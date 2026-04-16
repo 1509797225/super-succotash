@@ -4,6 +4,7 @@ private struct ProfileEditorSheet: View {
     let profile: UserProfile
     let onSave: (UserProfile) -> Void
 
+    @Environment(\.appThemeMode) private var themeMode
     @Environment(\.dismiss) private var dismiss
     @State private var nickname: String
     @State private var signature: String
@@ -24,14 +25,14 @@ private struct ProfileEditorSheet: View {
                     .font(ThemeTokens.Typography.body)
                     .padding(.horizontal, 20)
                     .frame(height: ThemeTokens.Metrics.controlHeight)
-                    .background(ThemeTokens.Colors.card)
+                    .background(ThemeTokens.card(for: themeMode))
                     .clipShape(Capsule())
 
                 TextField("Signature", text: $signature)
                     .font(ThemeTokens.Typography.body)
                     .padding(.horizontal, 20)
                     .frame(height: ThemeTokens.Metrics.controlHeight)
-                    .background(ThemeTokens.Colors.card)
+                    .background(ThemeTokens.card(for: themeMode))
                     .clipShape(Capsule())
 
                 HStack {
@@ -64,7 +65,7 @@ private struct ProfileEditorSheet: View {
                 }
                 .padding(.horizontal, 20)
                 .frame(height: ThemeTokens.Metrics.controlHeight)
-                .background(ThemeTokens.Colors.card)
+                .background(ThemeTokens.card(for: themeMode))
                 .clipShape(Capsule())
 
                 HStack(spacing: 16) {
@@ -120,7 +121,7 @@ struct SetView: View {
         SectionCard(title: "Profile") {
             HStack(spacing: 18) {
                 Circle()
-                    .fill(ThemeTokens.Colors.backgroundPrimary)
+                    .fill(ThemeTokens.accentSoft(for: store.settings.themeMode))
                     .frame(width: 78, height: 78)
                     .overlay(
                         Text(initials)
@@ -160,7 +161,15 @@ struct SetView: View {
                     updated.themeMode = mode
                     store.updateSettings(updated)
                 } label: {
-                    HStack {
+                    HStack(spacing: 14) {
+                        Circle()
+                            .fill(ThemeTokens.accent(for: mode))
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(ThemeTokens.Colors.textPrimary.opacity(0.08), lineWidth: 1)
+                            )
+
                         Text(mode.title)
                             .font(ThemeTokens.Typography.body)
                             .foregroundStyle(ThemeTokens.Colors.textPrimary)
@@ -198,7 +207,7 @@ struct SetView: View {
                     .font(ThemeTokens.Typography.body)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
             }
-            .tint(ThemeTokens.Colors.textSecondary)
+            .tint(ThemeTokens.accent(for: store.settings.themeMode))
         }
     }
 
@@ -216,7 +225,7 @@ struct SetView: View {
                     .font(ThemeTokens.Typography.body)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
             }
-            .tint(ThemeTokens.Colors.textSecondary)
+            .tint(ThemeTokens.accent(for: store.settings.themeMode))
 
             Divider()
                 .overlay(ThemeTokens.Colors.subtleLine)

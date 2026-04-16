@@ -220,16 +220,19 @@ struct UserProfile: Codable, Equatable {
 
 ```swift
 enum AppThemeMode: String, Codable, CaseIterable {
-    case pureWhite
-    case softGray
-    case followSystem
+    case pink
+    case blackWhite
+    case blue
+    case green
 }
 ```
 
 说明：
 
-- 即使提供主题设置，也只允许黑白灰体系内变化
-- 不引入彩色主题，保证整体审美统一
+- Set 页支持四种基调：`Pink / Black White / Blue / Green`
+- `Black White` 为当前默认黑白灰视觉，历史 `pureWhite` 本地值兼容映射为 `Black White`
+- 主题色只作为轻量强调色使用，不破坏大面积纯白、浅灰、深灰的基础视觉
+- 右滑完成填充必须使用当前主题色
 
 ### 6.5 AppSettings
 
@@ -278,7 +281,7 @@ final class AppStore: ObservableObject {
     @Published var todos: [TodoItem] = []
     @Published var pomodoroSessions: [PomodoroSession] = []
     @Published var profile: UserProfile = .init(nickname: "", signature: "", dailyGoal: 4)
-    @Published var settings: AppSettings = .init(themeMode: .pureWhite, hapticsEnabled: true, pomodoroGoalPerDay: 4, useLargeText: true)
+    @Published var settings: AppSettings = .init(themeMode: .blackWhite, hapticsEnabled: true, pomodoroGoalPerDay: 4, useLargeText: true)
 }
 ```
 
@@ -327,7 +330,9 @@ final class AppStore: ObservableObject {
 技术实现建议：
 
 - 任务列表使用 iOS 原生 `List`
-- 单行左滑采用内嵌横向 `ScrollView` 露出右侧操作区，不在行内挂自定义 `DragGesture`，避免再次破坏竖向滚动
+- 单行横向交互以竖向滚动稳定为最高优先级：左滑仍使用内嵌横向 `ScrollView` 展开右侧操作，右滑只在任务卡片内部做主题色填充
+- 默认停在任务卡片位置；向左滑露出右侧自定义果冻胶囊 `Edit / Delete`
+- 向右滑不得拉出新的胶囊或独立区域；主题色必须在原 Item 内从左向右逐步注满，滑到 50% 就停留 50%，达到完成阈值后等效完成当前任务
 - `List` 必须隐藏系统分割线和默认背景，通过透明 row background 保留 Jelly 卡片视觉
 - 左滑展开后的 UI 必须保持自定义果冻胶囊按钮，不使用系统默认矩形 `swipeActions` 外观
 
@@ -394,7 +399,7 @@ MVP 行为：
 
 #### Theme Section
 
-- 主题模式：Pure White / Soft Gray / Follow System
+- 主题模式：Pink / Black White / Blue / Green
 - 字体模式：默认大字开启，可切换
 
 #### App Preferences
@@ -709,7 +714,7 @@ struct JellyCardModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(Color(hex: "#F5F5F7"))
+            .background(ThemeTokens.card(for: themeMode))
             .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
     }
 }

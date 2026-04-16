@@ -22,7 +22,7 @@ struct TodayView: View {
                         .listRowBackground(Color.clear)
                 } else {
                     ForEach(Array(store.todayTodos.enumerated()), id: \.element.id) { offset, todo in
-                        TodoRow(index: offset + 1, item: todo) {
+                        TodoRow(index: offset + 1, item: todo, themeMode: store.settings.themeMode) {
                             detailTodoID = todo.id
                         } onLongPress: {
                             store.toggleTodoCompleted(id: todo.id)
@@ -30,6 +30,10 @@ struct TodayView: View {
                             editingTodo = todo
                         } onDelete: {
                             store.deleteTodo(id: todo.id)
+                        } onSwipeComplete: {
+                            if !todo.isCompleted {
+                                store.toggleTodoCompleted(id: todo.id)
+                            }
                         }
                         .listRowInsets(rowInsets(top: offset == 0 ? 24 : 0))
                         .listRowSeparator(.hidden)

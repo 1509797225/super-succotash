@@ -19,9 +19,7 @@ final class AppStore: ObservableObject {
 
     var preferredColorScheme: ColorScheme? {
         switch settings.themeMode {
-        case .pureWhite, .softGray:
-            return .light
-        case .followSystem:
+        case .pink, .blackWhite, .blue, .green:
             return .light
         }
     }

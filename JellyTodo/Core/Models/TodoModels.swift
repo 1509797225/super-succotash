@@ -146,21 +146,47 @@ struct UserProfile: Codable, Equatable {
 }
 
 enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
-    case pureWhite
-    case softGray
-    case followSystem
+    case pink
+    case blackWhite = "pureWhite"
+    case blue
+    case green
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .pureWhite:
-            return "Pure White"
-        case .softGray:
-            return "Soft Gray"
-        case .followSystem:
-            return "Follow System"
+        case .pink:
+            return "Pink"
+        case .blackWhite:
+            return "Black White"
+        case .blue:
+            return "Blue"
+        case .green:
+            return "Green"
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+
+        switch rawValue {
+        case Self.pink.rawValue:
+            self = .pink
+        case Self.blue.rawValue:
+            self = .blue
+        case Self.green.rawValue:
+            self = .green
+        case Self.blackWhite.rawValue, "softGray", "followSystem":
+            self = .blackWhite
+        default:
+            self = .blackWhite
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -171,7 +197,7 @@ struct AppSettings: Codable, Equatable {
     var useLargeText: Bool
 
     static let `default` = AppSettings(
-        themeMode: .pureWhite,
+        themeMode: .blackWhite,
         hapticsEnabled: true,
         pomodoroGoalPerDay: 4,
         useLargeText: true

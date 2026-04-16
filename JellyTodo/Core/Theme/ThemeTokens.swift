@@ -1,6 +1,24 @@
 import SwiftUI
 
+private struct AppThemeModeKey: EnvironmentKey {
+    static let defaultValue: AppThemeMode = .blackWhite
+}
+
+extension EnvironmentValues {
+    var appThemeMode: AppThemeMode {
+        get { self[AppThemeModeKey.self] }
+        set { self[AppThemeModeKey.self] = newValue }
+    }
+}
+
 enum ThemeTokens {
+    struct Palette {
+        let background: Color
+        let card: Color
+        let accent: Color
+        let accentSoft: Color
+    }
+
     enum Colors {
         static let backgroundPrimary = Color(hex: "#FFFFFF")
         static let backgroundSoft = Color(hex: "#F7F7F8")
@@ -30,11 +48,51 @@ enum ThemeTokens {
     }
 
     static func background(for mode: AppThemeMode) -> Color {
+        palette(for: mode).background
+    }
+
+    static func card(for mode: AppThemeMode) -> Color {
+        palette(for: mode).card
+    }
+
+    static func accent(for mode: AppThemeMode) -> Color {
+        palette(for: mode).accent
+    }
+
+    static func accentSoft(for mode: AppThemeMode) -> Color {
+        palette(for: mode).accentSoft
+    }
+
+    static func palette(for mode: AppThemeMode) -> Palette {
         switch mode {
-        case .pureWhite, .followSystem:
-            return Colors.backgroundPrimary
-        case .softGray:
-            return Colors.backgroundSoft
+        case .pink:
+            return Palette(
+                background: Color(hex: "#FFF8FA"),
+                card: Color(hex: "#FFF0F4"),
+                accent: Color(hex: "#F58BA8"),
+                accentSoft: Color(hex: "#FFDDE7")
+            )
+        case .blackWhite:
+            return Palette(
+                background: Colors.backgroundPrimary,
+                card: Colors.card,
+                accent: Colors.textPrimary,
+                accentSoft: Colors.subtleLine
+            )
+        case .blue:
+            return Palette(
+                background: Color(hex: "#F7FBFF"),
+                card: Color(hex: "#EEF6FF"),
+                accent: Color(hex: "#78AEEA"),
+                accentSoft: Color(hex: "#DCEEFF")
+            )
+        case .green:
+            return Palette(
+                background: Color(hex: "#F8FFF9"),
+                card: Color(hex: "#EEFAF1"),
+                accent: Color(hex: "#7BCB91"),
+                accentSoft: Color(hex: "#DDF5E4")
+            )
         }
     }
 }

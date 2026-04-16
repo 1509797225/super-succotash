@@ -139,7 +139,7 @@ struct PomodoroStatsView: View {
                         .foregroundStyle(range == item ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
                         .padding(.horizontal, 18)
                         .frame(height: 42)
-                        .background(range == item ? ThemeTokens.Colors.textPrimary : ThemeTokens.Colors.card)
+                        .background(range == item ? ThemeTokens.accent(for: store.settings.themeMode) : ThemeTokens.card(for: store.settings.themeMode))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
@@ -158,7 +158,7 @@ struct PomodoroStatsView: View {
                         .foregroundStyle(selectedMode == mode ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
                         .padding(.horizontal, 14)
                         .frame(height: 40)
-                        .background(selectedMode == mode ? ThemeTokens.Colors.textPrimary : ThemeTokens.Colors.backgroundPrimary)
+                        .background(selectedMode == mode ? ThemeTokens.accent(for: store.settings.themeMode) : ThemeTokens.background(for: store.settings.themeMode))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
