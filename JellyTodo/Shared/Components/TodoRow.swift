@@ -11,7 +11,11 @@ struct TodoRow: View {
     var onSwipeComplete: (() -> Void)? = nil
 
     @State private var settledFillWidth: CGFloat = 0
-    @GestureState private var activeRightDrag: CGFloat = 0
+    @State private var actionReveal: CGFloat = 0
+    @State private var dragStartFillWidth: CGFloat = 0
+    @State private var dragStartActionReveal: CGFloat = 0
+    @State private var dragAxis: DragAxis = .undetermined
+    @State private var hasCapturedDragStart = false
 
     private var actionWidth: CGFloat {
         let actionCount = [onEdit, onDelete].compactMap { $0 }.count
@@ -23,24 +27,17 @@ struct TodoRow: View {
         GeometryReader { proxy in
             let rowWidth = proxy.size.width
 
-            ScrollViewReader { reader in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        rowCard(width: rowWidth)
-                            .id("card")
+            ZStack(alignment: .trailing) {
+                if actionWidth > 0 {
+                    actionButtons
+                        .frame(width: actionWidth, alignment: .trailing)
+                }
 
-                        if actionWidth > 0 {
-                            actionButtons
-                                .frame(width: actionWidth, alignment: .trailing)
-                                .id("actions")
-                        }
-                    }
-                    .frame(height: ThemeTokens.Metrics.cardHeight)
-                }
-                .onAppear {
-                    reader.scrollTo("card", anchor: .leading)
-                }
+                rowCard(width: rowWidth)
+                    .offset(x: -actionReveal)
+                    .animation(.easeOut(duration: 0.18), value: actionReveal)
             }
+            .frame(width: rowWidth, height: ThemeTokens.Metrics.cardHeight)
         }
         .frame(height: ThemeTokens.Metrics.cardHeight)
         .onChange(of: item.isCompleted) { isCompleted in
@@ -85,8 +82,14 @@ struct TodoRow: View {
             .frame(width: width, height: ThemeTokens.Metrics.cardHeight)
         }
         .contentShape(RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius, style: .continuous))
-        .simultaneousGesture(rightFillGesture(rowWidth: width))
-        .onTapGesture(perform: onTap)
+        .simultaneousGesture(rowDragGesture(rowWidth: width))
+        .onTapGesture {
+            if actionReveal > 0 {
+                actionReveal = 0
+            } else {
+                onTap()
+            }
+        }
         .onLongPressGesture(minimumDuration: 0.45) {
             onLongPress?()
         }
@@ -128,35 +131,97 @@ struct TodoRow: View {
             return rowWidth
         }
 
-        return min(max(settledFillWidth + activeRightDrag, 0), rowWidth)
+        return min(max(settledFillWidth, 0), rowWidth)
     }
 
-    private func rightFillGesture(rowWidth: CGFloat) -> some Gesture {
+    private func rowDragGesture(rowWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 18, coordinateSpace: .local)
-            .updating($activeRightDrag) { value, state, _ in
-                guard isRightFillSwipe(value) else { return }
-                state = value.translation.width
+            .onChanged { value in
+                captureDragStartIfNeeded()
+                updateDragAxisIfNeeded(value)
+
+                guard dragAxis == .horizontal else { return }
+
+                if shouldRevealActions(value) {
+                    actionReveal = min(max(dragStartActionReveal - value.translation.width, 0), actionWidth)
+                    return
+                }
+
+                if shouldFillCompletion(value) {
+                    actionReveal = 0
+                    settledFillWidth = min(max(dragStartFillWidth + value.translation.width, 0), rowWidth)
+                }
             }
             .onEnded { value in
-                guard isRightFillSwipe(value) else { return }
+                defer { resetDragTracking() }
+                guard dragAxis == .horizontal else { return }
 
-                let targetWidth = min(max(settledFillWidth + value.translation.width, 0), rowWidth)
-                if targetWidth >= rowWidth * 0.94 {
-                    settledFillWidth = rowWidth
-                    if !item.isCompleted {
-                        onSwipeComplete?()
-                    }
-                } else {
-                    settledFillWidth = targetWidth
+                if shouldRevealActions(value) {
+                    settleActionReveal()
+                    return
+                }
+
+                guard shouldFillCompletion(value) else { return }
+                if settledFillWidth >= rowWidth * 0.94 {
+                    completeFromFill(rowWidth: rowWidth)
                 }
             }
     }
 
-    private func isRightFillSwipe(_ value: DragGesture.Value) -> Bool {
+    private func captureDragStartIfNeeded() {
+        guard !hasCapturedDragStart else { return }
+        hasCapturedDragStart = true
+        dragStartFillWidth = item.isCompleted ? 0 : settledFillWidth
+        dragStartActionReveal = actionReveal
+        dragAxis = .undetermined
+    }
+
+    private func updateDragAxisIfNeeded(_ value: DragGesture.Value) {
+        guard dragAxis == .undetermined else { return }
+
         let horizontal = value.translation.width
         let vertical = abs(value.translation.height)
-        return horizontal > 0 && horizontal > vertical * 1.25
+        guard max(abs(horizontal), vertical) > 10 else { return }
+
+        if abs(horizontal) > vertical * 1.2 {
+            dragAxis = .horizontal
+        } else if vertical > abs(horizontal) * 1.2 {
+            dragAxis = .vertical
+        }
     }
+
+    private func shouldRevealActions(_ value: DragGesture.Value) -> Bool {
+        actionWidth > 0 && (value.translation.width < 0 || dragStartActionReveal > 0)
+    }
+
+    private func shouldFillCompletion(_ value: DragGesture.Value) -> Bool {
+        value.translation.width > 0 && dragStartActionReveal == 0
+    }
+
+    private func settleActionReveal() {
+        let shouldStayOpen = actionReveal > min(actionWidth * 0.42, 68)
+        actionReveal = shouldStayOpen ? actionWidth : 0
+    }
+
+    private func completeFromFill(rowWidth: CGFloat) {
+        settledFillWidth = rowWidth
+        if !item.isCompleted {
+            onSwipeComplete?()
+        }
+    }
+
+    private func resetDragTracking() {
+        hasCapturedDragStart = false
+        dragStartFillWidth = 0
+        dragStartActionReveal = 0
+        dragAxis = .undetermined
+    }
+}
+
+private enum DragAxis: Equatable {
+    case undetermined
+    case horizontal
+    case vertical
 }
 
 struct ScaleButtonStyle: ButtonStyle {
