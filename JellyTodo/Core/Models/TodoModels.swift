@@ -1,5 +1,27 @@
 import Foundation
 
+enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
+    case once
+    case daily
+    case weekly
+    case monthly
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .once:
+            return "Once"
+        case .daily:
+            return "Daily"
+        case .weekly:
+            return "Weekly"
+        case .monthly:
+            return "Monthly"
+        }
+    }
+}
+
 struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
@@ -7,6 +29,56 @@ struct TodoItem: Identifiable, Codable, Equatable {
     let createdAt: Date
     var updatedAt: Date
     var taskDate: Date
+    var cycle: TodoTaskCycle
+    var dailyDurationMinutes: Int
+    var note: String
+
+    init(
+        id: UUID,
+        title: String,
+        isCompleted: Bool,
+        createdAt: Date,
+        updatedAt: Date,
+        taskDate: Date,
+        cycle: TodoTaskCycle = .daily,
+        dailyDurationMinutes: Int = 25,
+        note: String = ""
+    ) {
+        self.id = id
+        self.title = title
+        self.isCompleted = isCompleted
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.taskDate = taskDate
+        self.cycle = cycle
+        self.dailyDurationMinutes = dailyDurationMinutes
+        self.note = note
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case isCompleted
+        case createdAt
+        case updatedAt
+        case taskDate
+        case cycle
+        case dailyDurationMinutes
+        case note
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        taskDate = try container.decode(Date.self, forKey: .taskDate)
+        cycle = try container.decodeIfPresent(TodoTaskCycle.self, forKey: .cycle) ?? .daily
+        dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+    }
 }
 
 enum PomodoroSessionType: String, Codable, CaseIterable {

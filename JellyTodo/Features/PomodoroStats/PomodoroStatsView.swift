@@ -2,8 +2,14 @@ import SwiftUI
 
 struct PomodoroStatsView: View {
     @EnvironmentObject private var store: AppStore
+    let initialRelatedTodoID: UUID?
+
     @State private var range: PomodoroStatsRange = .today
     @State private var selectedMode: PomodoroTimerMode = .focus
+
+    init(initialRelatedTodoID: UUID? = nil) {
+        self.initialRelatedTodoID = initialRelatedTodoID
+    }
 
     var body: some View {
         let stats = store.stats(for: range)
@@ -66,6 +72,13 @@ struct PomodoroStatsView: View {
                     .font(ThemeTokens.Typography.sectionTitle)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
+                if let relatedTitle {
+                    Text("Linked task: \(relatedTitle)")
+                        .font(ThemeTokens.Typography.caption)
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+
                 modeSelector
 
                 VStack(spacing: 10) {
@@ -102,7 +115,7 @@ struct PomodoroStatsView: View {
                         }
                     } else {
                         CapsuleButton(title: "Start") {
-                            store.startPomodoro(mode: selectedMode)
+                            store.startPomodoro(mode: selectedMode, relatedTodoID: initialRelatedTodoID)
                         }
 
                         CapsuleButton(title: "Reset") {
@@ -177,6 +190,11 @@ struct PomodoroStatsView: View {
             return store.timerState.remainingSeconds
         }
         return selectedMode.defaultDuration
+    }
+
+    private var relatedTitle: String? {
+        guard let initialRelatedTodoID else { return nil }
+        return store.todos.first { $0.id == initialRelatedTodoID }?.title
     }
 
     private func legendRow(title: String, opacity: Double) -> some View {

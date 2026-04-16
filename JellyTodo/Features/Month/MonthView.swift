@@ -28,16 +28,10 @@ struct MonthView: View {
                                     ForEach(Array(section.items.enumerated()), id: \.element.id) { offset, todo in
                                         TodoRow(index: offset + 1, item: todo) {
                                             store.toggleTodoCompleted(id: todo.id)
-                                        }
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                            Button("Delete", role: .destructive) {
-                                                store.deleteTodo(id: todo.id)
-                                            }
-
-                                            Button("Edit") {
-                                                editingTodo = todo
-                                            }
-                                            .tint(.gray)
+                                        } onEdit: {
+                                            editingTodo = todo
+                                        } onDelete: {
+                                            store.deleteTodo(id: todo.id)
                                         }
                                     }
                                 }

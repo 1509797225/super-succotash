@@ -94,6 +94,16 @@ final class AppStore: ObservableObject {
         saveTodos()
     }
 
+    func updateTodoDetail(id: UUID, cycle: TodoTaskCycle, dailyDurationMinutes: Int, note: String) {
+        guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
+
+        todos[index].cycle = cycle
+        todos[index].dailyDurationMinutes = min(max(dailyDurationMinutes, 5), 480)
+        todos[index].note = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
+        todos[index].updatedAt = Date()
+        saveTodos()
+    }
+
     func deleteTodo(id: UUID) {
         todos.removeAll { $0.id == id }
         saveTodos()

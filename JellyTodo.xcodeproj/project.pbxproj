@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01B9B8B2B20189AFB4E97C14 /* TodoEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57600699839A0731D5B53E /* TodoEditorSheet.swift */; };
+		0D5A0B66CC7F44AC8F24E023 /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */; };
 		1311E0D4A4D469D76579494A /* PomodoroStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */; };
 		1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61CC7569C1C2EB985431761 /* AppStore.swift */; };
 		251B4ECE11D207FF38A94411 /* TodoRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D9168539CEEEB854A4A3073 /* TodoRow.swift */; };
@@ -32,6 +33,7 @@
 		44DDB83DB4B5C5B3C4AB4BE7 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		4AEFE23D0A68552473814A0A /* TodayView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		4D57600699839A0731D5B53E /* TodoEditorSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoEditorSheet.swift; sourceTree = "<group>"; };
+		48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		4E2DDF8657BADF9D34804A9B /* SetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SetView.swift; sourceTree = "<group>"; };
 		5D9168539CEEEB854A4A3073 /* TodoRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoRow.swift; sourceTree = "<group>"; };
 		6B1A5BC1698A4C2CAE8281C3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 			children = (
 				4AEFE23D0A68552473814A0A /* TodayView.swift */,
 				4D57600699839A0731D5B53E /* TodoEditorSheet.swift */,
+				48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */,
 			);
 			path = Today;
 			sourceTree = "<group>";
@@ -298,6 +301,7 @@
 				3648D29E1D894FB4F9BD4AD3 /* SetView.swift in Sources */,
 				81CC598D90769CBECD44314E /* TodayView.swift in Sources */,
 				01B9B8B2B20189AFB4E97C14 /* TodoEditorSheet.swift in Sources */,
+				0D5A0B66CC7F44AC8F24E023 /* TaskDetailView.swift in Sources */,
 				2B580DC1B8776A28EE5C51C8 /* JellyTodoApp.swift in Sources */,
 				F0A2A78239095E63BA328981 /* RootTabView.swift in Sources */,
 				FC32E2229ABA371D538BB949 /* CommonComponents.swift in Sources */,

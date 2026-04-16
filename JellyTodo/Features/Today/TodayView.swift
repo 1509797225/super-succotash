@@ -4,6 +4,7 @@ struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showingNewTask = false
     @State private var editingTodo: TodoItem?
+    @State private var detailTodoID: UUID?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -21,17 +22,13 @@ struct TodayView: View {
                         LazyVStack(spacing: ThemeTokens.Metrics.cardSpacing) {
                             ForEach(Array(store.todayTodos.enumerated()), id: \.element.id) { offset, todo in
                                 TodoRow(index: offset + 1, item: todo) {
+                                    detailTodoID = todo.id
+                                } onLongPress: {
                                     store.toggleTodoCompleted(id: todo.id)
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button("Delete", role: .destructive) {
-                                        store.deleteTodo(id: todo.id)
-                                    }
-
-                                    Button("Edit") {
-                                        editingTodo = todo
-                                    }
-                                    .tint(.gray)
+                                } onEdit: {
+                                    editingTodo = todo
+                                } onDelete: {
+                                    store.deleteTodo(id: todo.id)
                                 }
                             }
                         }
@@ -50,6 +47,20 @@ struct TodayView: View {
         }
         .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.large)
+        .navigationDestination(
+            isPresented: Binding(
+                get: { detailTodoID != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        detailTodoID = nil
+                    }
+                }
+            )
+        ) {
+            if let detailTodoID {
+                TaskDetailView(todoID: detailTodoID)
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 NavigationLink {

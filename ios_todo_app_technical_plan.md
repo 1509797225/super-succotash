@@ -134,7 +134,7 @@ App
 - `Core/Store`：统一承接业务状态和页面数据分发
 - `Core/Storage`：封装 `UserDefaults` 读写
 - `Core/Theme`：统一颜色、字号、阴影、圆角、间距 Token
-- `Features/Today`：Today 页面与新增/编辑弹窗
+- `Features/Today`：Today 页面、新增/编辑弹窗、任务详情二级页
 - `Features/Month`：月视图分组列表
 - `Features/Set`：设置页与子设置项
 - `Features/PomodoroStats`：番茄钟统计图页面
@@ -152,6 +152,9 @@ struct TodoItem: Identifiable, Codable, Equatable {
     let createdAt: Date
     var updatedAt: Date
     var taskDate: Date
+    var cycle: TodoTaskCycle
+    var dailyDurationMinutes: Int
+    var note: String
 }
 ```
 
@@ -163,6 +166,14 @@ struct TodoItem: Identifiable, Codable, Equatable {
 - `createdAt`：创建时间
 - `updatedAt`：最近修改时间
 - `taskDate`：任务归属日期，用于 Today 筛选和 Month 分组
+- `cycle`：任务周期，用于详情页展示与后续计划扩展
+- `dailyDurationMinutes`：每天计划投入时长，单位分钟
+- `note`：任务正文/备注内容
+
+兼容要求：
+
+- 新增字段必须有默认值，读取旧版本 `UserDefaults` 数据时不能闪退
+- 默认周期为 `Daily`，默认每天时长为 `25` 分钟，默认正文为空
 
 ### 6.2 PomodoroSession
 
@@ -275,6 +286,7 @@ final class AppStore: ObservableObject {
 
 - 统一加载初始数据
 - 统一暴露 Today 列表、Month 分组、番茄统计、设置状态
+- 统一暴露任务详情更新能力，页面不得直接写入 `UserDefaults`
 - 统一触发保存逻辑
 - 避免多个页面各自直接操作 `UserDefaults`
 
@@ -296,6 +308,9 @@ final class AppStore: ObservableObject {
 - 单个 Item 高度 `100pt`
 - 左右边距 `16pt`
 - 卡片间距 `20pt`
+- 轻点 Item：进入任务详情二级页
+- 长按 Item：完成/取消完成当前任务
+- 左滑 Item：显示删除能力，保留编辑能力作为辅助入口
 
 #### 新增入口
 
@@ -312,8 +327,35 @@ final class AppStore: ObservableObject {
 技术实现建议：
 
 - 列表使用 `ScrollView + LazyVStack`
-- 左滑采用 `swipeActions(edge: .trailing, allowsFullSwipe: false)`
+- 左滑采用自定义 `DragGesture` 卡片位移，不依赖 `List` 专用的系统 `swipeActions`
 - 为了保持灰白视觉，操作按钮自定义为浅灰底、深灰字
+
+### 9.1.1 任务详情二级页
+
+入口：
+
+- Today 页任务 Item 轻点进入
+- 页面使用 `NavigationLink` / `NavigationStack` 原生导航
+
+核心展示与编辑：
+
+- 顶部展示任务标题与完成状态
+- `Task Cycle`：任务周期，支持 `Once / Daily / Weekly / Monthly`
+- `Daily Duration`：每天计划时长，按 5 分钟步进，范围 `5-480` 分钟
+- `Body`：正文区域，支持多行输入，纯白/浅灰卡片，32pt 圆角
+- 所有字段变更后通过 `AppStore.updateTodoDetail` 持久化
+
+底部操作：
+
+- 固定底部胶囊按钮：`Enter Pomodoro`
+- 点击后进入 `PomodoroStatsView`
+- 若当前没有正在运行/暂停的计时器，可携带当前任务 ID 作为 `relatedTodoID`，便于后续番茄记录与任务关联
+
+交互约束：
+
+- 详情页不引入彩色状态
+- 输入控件保持灰白黑视觉，不使用系统蓝色强调
+- 正文为空时展示浅灰提示语，不影响保存
 
 ### 9.2 Month 页面
 
