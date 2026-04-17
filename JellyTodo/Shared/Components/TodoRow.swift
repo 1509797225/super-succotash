@@ -218,6 +218,108 @@ struct TodoRow: View {
     }
 }
 
+struct CompactTodoRow: View {
+    let item: TodoItem
+    let themeMode: AppThemeMode
+    var showsDate = false
+    var onTap: (() -> Void)? = nil
+    var onAddToday: (() -> Void)? = nil
+
+    @State private var actionReveal: CGFloat = 0
+    @State private var dragStartActionReveal: CGFloat = 0
+
+    private var actionWidth: CGFloat {
+        onAddToday == nil ? 0 : 96
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let rowWidth = proxy.size.width
+
+            ZStack(alignment: .trailing) {
+                if let onAddToday {
+                    Button(action: onAddToday) {
+                        Text("Today")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                            .frame(width: 82, height: 54)
+                            .background(ThemeTokens.card(for: themeMode))
+                            .clipShape(Capsule())
+                            .shadow(color: .white.opacity(0.75), radius: 3, x: -1, y: -1)
+                            .shadow(color: .black.opacity(0.08), radius: 5, x: 2, y: 2)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                compactCard(width: rowWidth)
+                    .offset(x: -actionReveal)
+                    .animation(.easeOut(duration: 0.18), value: actionReveal)
+            }
+            .frame(width: rowWidth, height: 72)
+        }
+        .frame(height: 72)
+    }
+
+    private func compactCard(width: CGFloat) -> some View {
+        JellyCard(shadowStyle: .listItem) {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(item.isCompleted ? ThemeTokens.accent(for: themeMode).opacity(0.5) : ThemeTokens.Colors.backgroundPrimary)
+                    .frame(width: 26, height: 26)
+                    .overlay(
+                        Circle()
+                            .stroke(ThemeTokens.Colors.textSecondary.opacity(0.42), lineWidth: 1.5)
+                    )
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(item.title)
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                        .lineLimit(1)
+                        .strikethrough(item.isCompleted, color: ThemeTokens.Colors.textPrimary)
+                        .opacity(item.isCompleted ? 0.55 : 1)
+
+                    if showsDate {
+                        Text(item.taskDate.formattedMonthDay())
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 18)
+            .frame(width: width, height: 72)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius, style: .continuous))
+        .simultaneousGesture(addTodayDragGesture())
+        .onTapGesture {
+            if actionReveal > 0 {
+                actionReveal = 0
+            } else {
+                onTap?()
+            }
+        }
+    }
+
+    private func addTodayDragGesture() -> some Gesture {
+        DragGesture(minimumDistance: 18, coordinateSpace: .local)
+            .onChanged { value in
+                guard actionWidth > 0 else { return }
+                if dragStartActionReveal == 0 {
+                    dragStartActionReveal = actionReveal
+                }
+                guard abs(value.translation.width) > abs(value.translation.height) * 1.2 else { return }
+                actionReveal = min(max(dragStartActionReveal - value.translation.width, 0), actionWidth)
+            }
+            .onEnded { _ in
+                guard actionWidth > 0 else { return }
+                actionReveal = actionReveal > 42 ? actionWidth : 0
+                dragStartActionReveal = 0
+            }
+    }
+}
+
 private enum DragAxis: Equatable {
     case undetermined
     case horizontal

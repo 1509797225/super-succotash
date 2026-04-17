@@ -49,6 +49,8 @@ enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
 
 struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
+    var planTaskID: UUID?
+    var isAddedToToday: Bool
     var title: String
     var isCompleted: Bool
     let createdAt: Date
@@ -61,6 +63,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
 
     init(
         id: UUID,
+        planTaskID: UUID? = nil,
+        isAddedToToday: Bool = true,
         title: String,
         isCompleted: Bool,
         createdAt: Date,
@@ -72,6 +76,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
         note: String = ""
     ) {
         self.id = id
+        self.planTaskID = planTaskID
+        self.isAddedToToday = isAddedToToday
         self.title = title
         self.isCompleted = isCompleted
         self.createdAt = createdAt
@@ -85,6 +91,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case planTaskID
+        case isAddedToToday
         case title
         case isCompleted
         case createdAt
@@ -99,6 +107,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
+        planTaskID = try container.decodeIfPresent(UUID.self, forKey: .planTaskID)
+        isAddedToToday = try container.decodeIfPresent(Bool.self, forKey: .isAddedToToday) ?? true
         title = try container.decode(String.self, forKey: .title)
         isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
@@ -109,6 +119,14 @@ struct TodoItem: Identifiable, Codable, Equatable {
         focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
+}
+
+struct PlanTask: Identifiable, Codable, Equatable {
+    let id: UUID
+    var title: String
+    let createdAt: Date
+    var updatedAt: Date
+    var isCollapsed: Bool
 }
 
 enum PomodoroSessionType: String, Codable, CaseIterable {
@@ -254,6 +272,12 @@ enum PomodoroStatsRange: String, CaseIterable, Identifiable {
 struct TodoDaySection: Identifiable, Equatable {
     var id: Date { date }
     let date: Date
+    let items: [TodoItem]
+}
+
+struct PlanTaskSection: Identifiable, Equatable {
+    var id: UUID { task.id }
+    let task: PlanTask
     let items: [TodoItem]
 }
 

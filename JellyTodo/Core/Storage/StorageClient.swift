@@ -7,6 +7,7 @@ struct StorageClient {
 
     enum Key: String {
         case todos = "todo.items"
+        case planTasks = "plan.tasks"
         case pomodoroSessions = "pomodoro.sessions"
         case userProfile = "user.profile"
         case appSettings = "app.settings"

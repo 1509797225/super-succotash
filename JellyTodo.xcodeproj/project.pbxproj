@@ -17,7 +17,7 @@
 		3648D29E1D894FB4F9BD4AD3 /* SetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2DDF8657BADF9D34804A9B /* SetView.swift */; };
 		56C2A682E6E111E17AEF2DFD /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 6B1A5BC1698A4C2CAE8281C3 /* Assets.xcassets */; };
 		81CC598D90769CBECD44314E /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AEFE23D0A68552473814A0A /* TodayView.swift */; };
-		83143B7B5DC6780FB94C79D6 /* MonthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3354589011D47986314B492 /* MonthView.swift */; };
+		83143B7B5DC6780FB94C79D6 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3354589011D47986314B492 /* PlanView.swift */; };
 		97540DE6D9BE99AC95AE1840 /* TodoModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4AA1E5D8E761145206F08FC /* TodoModels.swift */; };
 		98A2A59F5385365D2BE3BC75 /* ThemeTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E79108D4BE346DFCDAD370 /* ThemeTokens.swift */; };
 		AD720A1F3AF3BAE91DEBA909 /* DonutChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6460C469AD623E933EE070 /* DonutChartView.swift */; };
@@ -44,7 +44,7 @@
 		A7E42F33B9134B118B7D91D2 /* TaskFocusPieIcon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskFocusPieIcon.swift; sourceTree = "<group>"; };
 		AD473AF3501705CEAA03D764 /* RootTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		B4AA1E5D8E761145206F08FC /* TodoModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoModels.swift; sourceTree = "<group>"; };
-		D3354589011D47986314B492 /* MonthView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MonthView.swift; sourceTree = "<group>"; };
+		D3354589011D47986314B492 /* PlanView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
 		EC55FD779DE9523092A5FE66 /* JellyTodo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JellyTodo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FE07C3AFE85CE825E307F619 /* StorageClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StorageClient.swift; sourceTree = "<group>"; };
 		FE6460C469AD623E933EE070 /* DonutChartView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DonutChartView.swift; sourceTree = "<group>"; };
@@ -107,7 +107,7 @@
 		3E4661D4AFFD400DA92B6354 /* Month */ = {
 			isa = PBXGroup;
 			children = (
-				D3354589011D47986314B492 /* MonthView.swift */,
+				D3354589011D47986314B492 /* PlanView.swift */,
 			);
 			path = Month;
 			sourceTree = "<group>";
@@ -299,7 +299,7 @@
 				1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */,
 				98A2A59F5385365D2BE3BC75 /* ThemeTokens.swift in Sources */,
 				35FBBC871FACB54DF40614AF /* Extensions.swift in Sources */,
-				83143B7B5DC6780FB94C79D6 /* MonthView.swift in Sources */,
+				83143B7B5DC6780FB94C79D6 /* PlanView.swift in Sources */,
 				1311E0D4A4D469D76579494A /* PomodoroStatsView.swift in Sources */,
 				3648D29E1D894FB4F9BD4AD3 /* SetView.swift in Sources */,
 				81CC598D90769CBECD44314E /* TodayView.swift in Sources */,

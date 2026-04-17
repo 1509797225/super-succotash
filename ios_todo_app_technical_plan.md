@@ -24,7 +24,7 @@
 
 | Tab | 名称 | 说明 |
 | --- | --- | --- |
-| Month | 月度待办 | 展示当月全部任务，按日期分组 |
+| Plan | 计划 | 展示可折叠任务组，任务组下可继续增加 item |
 | Today | 今日待办 | 默认首页，展示今日任务和新增入口 |
 | Set | 设置 | 展示个人账户设置、主题设置、应用偏好等 |
 
@@ -37,7 +37,7 @@
 ### 2.3 MVP 功能范围
 
 - Todo 任务新增、编辑、删除、完成切换
-- Month / Today / Set 三个一级页面
+- Plan / Today / Set 三个一级页面
 - Today 页顶部番茄钟统计入口
 - 完整番茄钟计时能力（Focus / Short Break / Long Break）
 - 本地任务持久化
@@ -135,7 +135,7 @@ App
 - `Core/Storage`：封装 `UserDefaults` 读写
 - `Core/Theme`：统一颜色、字号、阴影、圆角、间距 Token
 - `Features/Today`：Today 页面、新增/编辑弹窗、任务详情二级页
-- `Features/Month`：月视图分组列表
+- `Features/Month`：Plan 页面；目录名暂沿用 Month，页面实现为 `PlanView`
 - `Features/Set`：设置页与子设置项
 - `Features/PomodoroStats`：番茄钟统计图页面
 - `Shared/Components`：任务卡片、胶囊按钮、弹窗、分组标题等复用组件
@@ -147,6 +147,8 @@ App
 ```swift
 struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
+    var planTaskID: UUID?
+    var isAddedToToday: Bool
     var title: String
     var isCompleted: Bool
     let createdAt: Date
@@ -162,11 +164,13 @@ struct TodoItem: Identifiable, Codable, Equatable {
 字段说明：
 
 - `id`：唯一标识
+- `planTaskID`：可选计划任务组 ID；为空表示普通独立 Todo
+- `isAddedToToday`：是否已加入 Today；普通 Todo 默认为 true，Plan item 默认 false
 - `title`：任务标题
 - `isCompleted`：完成状态
 - `createdAt`：创建时间
 - `updatedAt`：最近修改时间
-- `taskDate`：任务归属日期，用于 Today 筛选和 Month 分组
+- `taskDate`：任务归属日期，用于 Today 筛选和 Month 分组；仅 `isAddedToToday = true` 时参与 Today/Month 展示
 - `cycle`：任务周期，用于详情页展示与后续计划扩展
 - `dailyDurationMinutes`：每天计划投入时长，单位分钟
 - `focusTimerDirection`：开始专注时的计时方向，支持倒计时和正计时
@@ -177,7 +181,25 @@ struct TodoItem: Identifiable, Codable, Equatable {
 - 新增字段必须有默认值，读取旧版本 `UserDefaults` 数据时不能闪退
 - 默认周期为 `Daily`，默认每天时长为 `25` 分钟，默认计时方向为 `Count Down`，默认正文为空
 
-### 6.2 PomodoroSession
+### 6.2 PlanTask
+
+```swift
+struct PlanTask: Identifiable, Codable, Equatable {
+    let id: UUID
+    var title: String
+    let createdAt: Date
+    var updatedAt: Date
+    var isCollapsed: Bool
+}
+```
+
+说明：
+
+- `PlanTask` 是 Plan 页的一级任务组，可折叠
+- `TodoItem.planTaskID` 指向所属任务组
+- Plan item 与 Today item 是同一条 `TodoItem` 数据，加入 Today 时设置 `isAddedToToday = true` 并更新 `taskDate`
+
+### 6.3 PomodoroSession
 
 ```swift
 enum PomodoroSessionType: String, Codable {
@@ -291,7 +313,7 @@ final class AppStore: ObservableObject {
 ### 8.2 业务职责
 
 - 统一加载初始数据
-- 统一暴露 Today 列表、Month 分组、番茄统计、设置状态
+- 统一暴露 Today 列表、Today 内 Month 分组、Plan 任务组、番茄统计、设置状态
 - 统一暴露任务详情更新能力，页面不得直接写入 `UserDefaults`
 - 统一触发保存逻辑
 - 避免多个页面各自直接操作 `UserDefaults`
@@ -311,6 +333,11 @@ final class AppStore: ObservableObject {
 
 - 展示 `taskDate` 属于今天的任务
 - 列表按 `createdAt` 升序排序
+- Today 页顶部提供 `Today / Month` 胶囊切换
+- 切到 Month 视图时，Today Tab 文案临时变为 `Month`
+- Month 视图展示当前自然月全部 item，按日期分组
+- Month 视图日期标题支持点击折叠/展开
+- Month 视图 item 使用小号卡片，不使用右滑注水完成动效
 - 单个 Item 高度 `100pt`
 - 左右边距 `16pt`
 - 卡片间距 `20pt`
@@ -343,7 +370,7 @@ final class AppStore: ObservableObject {
 
 入口：
 
-- Today / Month 页任务 Item 轻点打开从底部上滑的半模态面板
+- Today / Plan 页任务 Item 轻点打开从底部上滑的半模态面板
 - 不再通过轻点任务进入任务详情二级页
 - 半模态交互形态与 `New Task` 弹窗一致，点击空白处或下滑可关闭
 
@@ -410,18 +437,21 @@ final class AppStore: ObservableObject {
 - 若任务计时方向为 `Count Up`：从 `00:00` 正计时至 `dailyDurationMinutes`
 - 默认任务每日时长为 `25` 分钟，默认方向为 `Count Down`
 
-### 9.2 Month 页面
+### 9.2 Plan 页面
 
-- 展示当月全部任务
-- 使用 `Dictionary(grouping:by:)` 或按自然日分组
-- 分组标题格式：`Apr 16`
-- 每组标题 24pt 粗体
-- 卡片样式与 Today 完全一致
+- 第一个底部 Tab 固定为 `Plan`，不再是 `Month`
+- Plan 页展示一级任务组 `PlanTask`
+- 每个任务组可折叠/展开
+- 任务组下可新增 item
+- item 使用小号 Todo 风格卡片，但不带右滑注水完成动效
+- item 左滑露出 `Today` 胶囊按钮，点击后把该 item 加入 Today
+- 加入 Today 的实现是更新同一条 `TodoItem.isAddedToToday = true` 且 `taskDate = Date()`，Today 与 Plan 数据必须同步
 
 技术要点：
 
-- 使用 `Calendar.current.isDate(_:equalTo:toGranularity:)` 分组
-- 为保证排序稳定，先按日期升序，再按创建时间升序
+- `PlanTask` 独立存储在 `UserDefaults`
+- `TodoItem.planTaskID` 负责关联任务组
+- Plan item 不复制数据到 Today，避免双份状态不同步
 
 ### 9.3 Set 页面
 
@@ -633,7 +663,7 @@ flowchart TD
     B --> C["Add Task Sheet"]
     B --> D["Edit Task Sheet"]
     B --> E["Pomodoro Stats"]
-    B --> F["Month Tab"]
+    B --> F["Plan Tab"]
     B --> G["Set Tab"]
     G --> H["Edit Profile"]
     G --> I["Theme Settings"]
@@ -662,18 +692,17 @@ UI 说明：
 - 列表卡片占据主要视觉面积
 - 悬浮按钮固定右下角，避免遮挡最后一个 Item
 
-### 11.3 Month 页面 UI
+### 11.3 Plan 页面 UI
 
 ```text
 ┌────────────────────────────────────┐
-│ Month                              │
+│ Plan                               │
 │                                    │
-│ Apr 16                             │
-│ 01  Buy groceries            ○     │
-│ 02  Finish UI draft          ●     │
+│ Project A                    ⌃     │
+│   Draft outline              Today │
+│   Review assets              Today │
 │                                    │
-│ Apr 17                             │
-│ 01  Review proposal          ○     │
+│ Personal                      ⌄     │
 └────────────────────────────────────┘
 ```
 
@@ -812,7 +841,7 @@ struct JellyCardModifier: ViewModifier {
 
 ### Phase 3
 
-- 完成 Month 页和 Set 页
+- 完成 Plan 页和 Set 页
 - 接入个人资料、本地设置
 
 ### Phase 4

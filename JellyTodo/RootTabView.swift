@@ -1,7 +1,7 @@
 import SwiftUI
 
 private enum AppTab: Hashable {
-    case month
+    case plan
     case today
     case set
 }
@@ -9,22 +9,23 @@ private enum AppTab: Hashable {
 struct RootTabView: View {
     @Environment(\.appThemeMode) private var themeMode
     @State private var selectedTab: AppTab = .today
+    @State private var todayTabTitle = "Today"
 
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                MonthView()
+                PlanView()
             }
             .tabItem {
-                Label("Month", systemImage: "calendar")
+                Label("Plan", systemImage: "list.bullet.rectangle.portrait")
             }
-            .tag(AppTab.month)
+            .tag(AppTab.plan)
 
             NavigationStack {
-                TodayView()
+                TodayView(tabTitle: $todayTabTitle)
             }
             .tabItem {
-                Label("Today", systemImage: "sun.max")
+                Label(todayTabTitle, systemImage: todayTabTitle == "Month" ? "calendar" : "sun.max")
             }
             .tag(AppTab.today)
 

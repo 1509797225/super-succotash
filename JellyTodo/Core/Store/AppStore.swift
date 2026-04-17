@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class AppStore: ObservableObject {
     @Published var todos: [TodoItem] = []
+    @Published var planTasks: [PlanTask] = []
     @Published var pomodoroSessions: [PomodoroSession] = []
     @Published var profile: UserProfile = .default
     @Published var settings: AppSettings = .default
@@ -26,14 +27,18 @@ final class AppStore: ObservableObject {
 
     var todayTodos: [TodoItem] {
         todos
-            .filter { Calendar.current.isDateInToday($0.taskDate) }
+            .filter { $0.isAddedToToday && Calendar.current.isDateInToday($0.taskDate) }
             .sorted { $0.createdAt < $1.createdAt }
     }
 
     var monthSections: [TodoDaySection] {
-        let now = Date()
+        monthSections(for: Date(), compact: false)
+    }
+
+    func monthSections(for month: Date = Date(), compact: Bool = false) -> [TodoDaySection] {
+        let calendar = Calendar.current
         let grouped = Dictionary(grouping: todos.filter {
-            Calendar.current.isDate($0.taskDate, equalTo: now, toGranularity: .month)
+            $0.isAddedToToday && calendar.isDate($0.taskDate, equalTo: month, toGranularity: .month)
         }) { item in
             Calendar.current.startOfDay(for: item.taskDate)
         }
@@ -48,6 +53,19 @@ final class AppStore: ObservableObject {
             .sorted { $0.date < $1.date }
     }
 
+    var planSections: [PlanTaskSection] {
+        planTasks
+            .sorted { $0.createdAt < $1.createdAt }
+            .map { task in
+                PlanTaskSection(
+                    task: task,
+                    items: todos
+                        .filter { $0.planTaskID == task.id }
+                        .sorted { $0.createdAt < $1.createdAt }
+                )
+            }
+    }
+
     var totalCompletedCount: Int {
         todos.filter(\.isCompleted).count
     }
@@ -58,6 +76,7 @@ final class AppStore: ObservableObject {
 
     func loadInitialState() {
         todos = storage.load([TodoItem].self, for: .todos) ?? []
+        planTasks = storage.load([PlanTask].self, for: .planTasks) ?? []
         pomodoroSessions = storage.load([PomodoroSession].self, for: .pomodoroSessions) ?? []
         profile = storage.load(UserProfile.self, for: .userProfile) ?? .default
         settings = storage.load(AppSettings.self, for: .appSettings) ?? .default
@@ -80,6 +99,60 @@ final class AppStore: ObservableObject {
                 taskDate: taskDate
             )
         )
+        saveTodos()
+    }
+
+    func addPlanTask(title: String) {
+        let trimmed = sanitize(title)
+        guard !trimmed.isEmpty else { return }
+
+        let now = Date()
+        planTasks.append(
+            PlanTask(
+                id: UUID(),
+                title: trimmed,
+                createdAt: now,
+                updatedAt: now,
+                isCollapsed: false
+            )
+        )
+        savePlanTasks()
+    }
+
+    func addPlanItem(title: String, to planTaskID: UUID) {
+        let trimmed = sanitize(title)
+        guard !trimmed.isEmpty else { return }
+        guard planTasks.contains(where: { $0.id == planTaskID }) else { return }
+
+        let now = Date()
+        todos.append(
+            TodoItem(
+                id: UUID(),
+                planTaskID: planTaskID,
+                isAddedToToday: false,
+                title: trimmed,
+                isCompleted: false,
+                createdAt: now,
+                updatedAt: now,
+                taskDate: now
+            )
+        )
+        saveTodos()
+    }
+
+    func togglePlanTaskCollapsed(id: UUID) {
+        guard let index = planTasks.firstIndex(where: { $0.id == id }) else { return }
+        planTasks[index].isCollapsed.toggle()
+        planTasks[index].updatedAt = Date()
+        savePlanTasks()
+    }
+
+    func addTodoToToday(id: UUID) {
+        guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
+        todos[index].isAddedToToday = true
+        todos[index].taskDate = Date()
+        todos[index].updatedAt = Date()
+        triggerHaptic()
         saveTodos()
     }
 
@@ -344,6 +417,7 @@ final class AppStore: ObservableObject {
 
     private func savePersistentState() {
         saveTodos()
+        savePlanTasks()
         saveSessions()
         saveProfile()
         saveSettings()
@@ -351,6 +425,10 @@ final class AppStore: ObservableObject {
 
     private func saveTodos() {
         storage.save(todos, for: .todos)
+    }
+
+    private func savePlanTasks() {
+        storage.save(planTasks, for: .planTasks)
     }
 
     private func saveSessions() {
