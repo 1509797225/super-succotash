@@ -36,6 +36,15 @@ enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
             return "Count Up"
         }
     }
+
+    var shortTitle: String {
+        switch self {
+        case .countDown:
+            return "Down"
+        case .countUp:
+            return "Up"
+        }
+    }
 }
 
 struct TodoItem: Identifiable, Codable, Equatable {
