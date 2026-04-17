@@ -11,14 +11,16 @@ struct TaskActionSheet: View {
     @State private var durationUnit: FocusDurationUnit = .minutes
 
     var body: some View {
-        BottomSheetContainer(title: "Task") {
-            VStack(spacing: 20) {
-                taskSummaryCard
-                focusedDurationCard
-                editDeleteRow
+        BottomSheetContainer(title: "") {
+            VStack(spacing: 18) {
+                taskHeroCard
+                HStack(spacing: 14) {
+                    focusedDurationCard
+                    editDeleteColumn
+                }
             }
         }
-        .presentationDetents([.height(460)])
+        .presentationDetents([.height(430)])
         .presentationDragIndicator(.hidden)
         .sheet(isPresented: $showingEditor) {
             TodoEditorSheet(title: "Edit Task", todo: latestTodo, confirmTitle: "Save") { result in
@@ -38,27 +40,28 @@ struct TaskActionSheet: View {
         store.todos.first { $0.id == todo.id } ?? todo
     }
 
-    private var taskSummaryCard: some View {
+    private var taskHeroCard: some View {
         JellyCard {
-            VStack(spacing: 18) {
+            VStack(spacing: 22) {
+                Text(todo.title)
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .lineLimit(3)
+                    .minimumScaleFactor(0.72)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .strikethrough(todo.isCompleted, color: ThemeTokens.Colors.textPrimary)
+
                 HStack(spacing: 8) {
                     taskMetaPill(title: todo.cycle.title)
                     taskMetaPill(title: "\(todo.dailyDurationMinutes) min")
                     taskMetaPill(title: todo.focusTimerDirection.shortTitle)
                 }
 
-                Text(todo.title)
-                    .font(ThemeTokens.Typography.taskTitle)
-                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
-                    .lineLimit(3)
-                    .minimumScaleFactor(0.82)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .strikethrough(todo.isCompleted, color: ThemeTokens.Colors.textPrimary)
-
                 focusButton
             }
-            .padding(20)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 28)
         }
     }
 
@@ -67,9 +70,16 @@ struct TaskActionSheet: View {
             dismiss()
             onStartFocus(todo)
         } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 20, weight: .bold))
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(ThemeTokens.Colors.backgroundPrimary.opacity(0.18))
+                        .frame(width: 34, height: 34)
+
+                    Image(systemName: "play.fill")
+                        .font(.system(size: 15, weight: .bold))
+                }
+
                 Text("Start Focus")
                     .font(ThemeTokens.Typography.body)
             }
@@ -82,17 +92,18 @@ struct TaskActionSheet: View {
         .buttonStyle(.plain)
     }
 
-    private var editDeleteRow: some View {
-        HStack(spacing: 14) {
-            actionPill(title: "Edit", systemImage: "square.and.pencil") {
+    private var editDeleteColumn: some View {
+        VStack(spacing: 12) {
+            iconActionPill(title: "Edit", systemImage: "pencil") {
                 showingEditor = true
             }
 
-            actionPill(title: "Delete", systemImage: "trash") {
+            iconActionPill(title: "Delete", systemImage: "trash") {
                 store.deleteTodo(id: todo.id)
                 dismiss()
             }
         }
+        .frame(width: 112)
     }
 
     private var focusedDurationCard: some View {
@@ -100,23 +111,25 @@ struct TaskActionSheet: View {
             durationUnit = durationUnit.next
         } label: {
             JellyCard {
-                VStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Focused")
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
                     Text(durationUnit.format(seconds: store.focusedSeconds(for: todo.id)))
-                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .font(.system(size: 38, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.72)
 
-                    Text("tap h / min / s")
+                    Text("tap unit")
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary.opacity(0.75))
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(height: 132)
+                .padding(.horizontal, 20)
             }
         }
         .buttonStyle(.plain)
@@ -129,24 +142,24 @@ struct TaskActionSheet: View {
             .lineLimit(1)
             .minimumScaleFactor(0.7)
             .frame(maxWidth: .infinity)
-            .frame(height: 34)
+            .frame(height: 36)
             .background(ThemeTokens.Colors.backgroundPrimary.opacity(0.8))
             .clipShape(Capsule())
     }
 
-    private func actionPill(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+    private func iconActionPill(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 18, weight: .bold))
                 Text(title)
-                    .font(ThemeTokens.Typography.body)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
             }
             .foregroundStyle(ThemeTokens.Colors.textPrimary)
             .frame(maxWidth: .infinity)
-            .frame(height: ThemeTokens.Metrics.controlHeight)
+            .frame(height: 70)
             .background(ThemeTokens.card(for: store.settings.themeMode))
-            .clipShape(Capsule())
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
         }
         .buttonStyle(.plain)
     }
