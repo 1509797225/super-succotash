@@ -22,6 +22,22 @@ enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
+    case countDown
+    case countUp
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .countDown:
+            return "Count Down"
+        case .countUp:
+            return "Count Up"
+        }
+    }
+}
+
 struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
     var title: String
@@ -31,6 +47,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var taskDate: Date
     var cycle: TodoTaskCycle
     var dailyDurationMinutes: Int
+    var focusTimerDirection: FocusTimerDirection
     var note: String
 
     init(
@@ -42,6 +59,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         taskDate: Date,
         cycle: TodoTaskCycle = .daily,
         dailyDurationMinutes: Int = 25,
+        focusTimerDirection: FocusTimerDirection = .countDown,
         note: String = ""
     ) {
         self.id = id
@@ -52,6 +70,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.taskDate = taskDate
         self.cycle = cycle
         self.dailyDurationMinutes = dailyDurationMinutes
+        self.focusTimerDirection = focusTimerDirection
         self.note = note
     }
 
@@ -64,6 +83,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         case taskDate
         case cycle
         case dailyDurationMinutes
+        case focusTimerDirection
         case note
     }
 
@@ -77,6 +97,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         taskDate = try container.decode(Date.self, forKey: .taskDate)
         cycle = try container.decodeIfPresent(TodoTaskCycle.self, forKey: .cycle) ?? .daily
         dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
+        focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
 }
@@ -150,6 +171,7 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
     case blackWhite = "pureWhite"
     case blue
     case green
+    case rainbow
 
     var id: String { rawValue }
 
@@ -163,6 +185,8 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
             return "Blue"
         case .green:
             return "Green"
+        case .rainbow:
+            return "Rainbow"
         }
     }
 
@@ -177,6 +201,8 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
             self = .blue
         case Self.green.rawValue:
             self = .green
+        case Self.rainbow.rawValue:
+            self = .rainbow
         case Self.blackWhite.rawValue, "softGray", "followSystem":
             self = .blackWhite
         default:
@@ -224,8 +250,10 @@ struct TodoDaySection: Identifiable, Equatable {
 
 struct PomodoroTimerState: Equatable {
     var mode: PomodoroTimerMode = .focus
+    var direction: FocusTimerDirection = .countDown
     var totalSeconds: Int = PomodoroTimerMode.focus.defaultDuration
     var remainingSeconds: Int = PomodoroTimerMode.focus.defaultDuration
+    var elapsedSeconds: Int = 0
     var isRunning = false
     var isPaused = false
     var startedAt: Date?
@@ -234,7 +262,21 @@ struct PomodoroTimerState: Equatable {
 
     var progress: Double {
         guard totalSeconds > 0 else { return 0 }
-        return Double(totalSeconds - remainingSeconds) / Double(totalSeconds)
+        switch direction {
+        case .countDown:
+            return Double(totalSeconds - remainingSeconds) / Double(totalSeconds)
+        case .countUp:
+            return Double(elapsedSeconds) / Double(totalSeconds)
+        }
+    }
+
+    var displaySeconds: Int {
+        switch direction {
+        case .countDown:
+            return remainingSeconds
+        case .countUp:
+            return elapsedSeconds
+        }
     }
 }
 
@@ -257,4 +299,10 @@ struct DonutChartSegment: Identifiable, Equatable {
     let value: Double
     let label: String
     let opacity: Double
+}
+
+struct TaskFocusSummary: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let seconds: Int
 }

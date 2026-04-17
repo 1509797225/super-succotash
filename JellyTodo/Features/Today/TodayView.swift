@@ -4,7 +4,8 @@ struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showingNewTask = false
     @State private var editingTodo: TodoItem?
-    @State private var detailTodoID: UUID?
+    @State private var selectedTodo: TodoItem?
+    @State private var focusTodoID: UUID?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -23,7 +24,7 @@ struct TodayView: View {
                 } else {
                     ForEach(Array(store.todayTodos.enumerated()), id: \.element.id) { offset, todo in
                         TodoRow(index: offset + 1, item: todo, themeMode: store.settings.themeMode) {
-                            detailTodoID = todo.id
+                            selectedTodo = todo
                         } onLongPress: {
                             store.toggleTodoCompleted(id: todo.id)
                         } onEdit: {
@@ -61,16 +62,16 @@ struct TodayView: View {
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(
             isPresented: Binding(
-                get: { detailTodoID != nil },
+                get: { focusTodoID != nil },
                 set: { isPresented in
                     if !isPresented {
-                        detailTodoID = nil
+                        focusTodoID = nil
                     }
                 }
             )
         ) {
-            if let detailTodoID {
-                TaskDetailView(todoID: detailTodoID)
+            if let focusTodoID {
+                FocusSessionView(todoID: focusTodoID)
             }
         }
         .toolbar {
@@ -89,9 +90,23 @@ struct TodayView: View {
                 store.addTodo(title: text, taskDate: Date())
             }
         }
+        .sheet(item: $selectedTodo) { todo in
+            TaskActionSheet(todo: todo) { todo in
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    focusTodoID = todo.id
+                }
+            }
+        }
         .sheet(item: $editingTodo) { todo in
-            TodoEditorSheet(title: "Edit Task", initialText: todo.title, confirmTitle: "Save") { text in
-                store.updateTodo(id: todo.id, title: text)
+            TodoEditorSheet(title: "Edit Task", todo: todo, confirmTitle: "Save") { result in
+                store.updateTodo(id: todo.id, title: result.title)
+                store.updateTodoDetail(
+                    id: todo.id,
+                    cycle: result.cycle,
+                    dailyDurationMinutes: result.dailyDurationMinutes,
+                    focusTimerDirection: result.focusTimerDirection,
+                    note: todo.note
+                )
             }
         }
     }

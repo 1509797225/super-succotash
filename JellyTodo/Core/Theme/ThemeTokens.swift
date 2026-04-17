@@ -93,6 +93,13 @@ enum ThemeTokens {
                 accent: Color(hex: "#7BCB91"),
                 accentSoft: Color(hex: "#DDF5E4")
             )
+        case .rainbow:
+            return Palette(
+                background: Color(hex: "#FFFDF7"),
+                card: Color(hex: "#FFF7EE"),
+                accent: Color(hex: "#FF8A5B"),
+                accentSoft: Color(hex: "#FFE8C7")
+            )
         }
     }
 }

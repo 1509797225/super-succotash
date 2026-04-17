@@ -22,6 +22,7 @@
 		98A2A59F5385365D2BE3BC75 /* ThemeTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77E79108D4BE346DFCDAD370 /* ThemeTokens.swift */; };
 		AD720A1F3AF3BAE91DEBA909 /* DonutChartView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6460C469AD623E933EE070 /* DonutChartView.swift */; };
 		B2498A326283A62F78110AA2 /* StorageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE07C3AFE85CE825E307F619 /* StorageClient.swift */; };
+		D4C9F4B9D0E74E19A3B61C88 /* TaskFocusPieIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E42F33B9134B118B7D91D2 /* TaskFocusPieIcon.swift */; };
 		F0A2A78239095E63BA328981 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD473AF3501705CEAA03D764 /* RootTabView.swift */; };
 		FC32E2229ABA371D538BB949 /* CommonComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C376E44067E72899DABFB23 /* CommonComponents.swift */; };
 /* End PBXBuildFile section */
@@ -31,15 +32,16 @@
 		2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PomodoroStatsView.swift; sourceTree = "<group>"; };
 		3C376E44067E72899DABFB23 /* CommonComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommonComponents.swift; sourceTree = "<group>"; };
 		44DDB83DB4B5C5B3C4AB4BE7 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		4AEFE23D0A68552473814A0A /* TodayView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		4D57600699839A0731D5B53E /* TodoEditorSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoEditorSheet.swift; sourceTree = "<group>"; };
-		48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		4E2DDF8657BADF9D34804A9B /* SetView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SetView.swift; sourceTree = "<group>"; };
 		5D9168539CEEEB854A4A3073 /* TodoRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoRow.swift; sourceTree = "<group>"; };
 		6B1A5BC1698A4C2CAE8281C3 /* Assets.xcassets */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		77E79108D4BE346DFCDAD370 /* ThemeTokens.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemeTokens.swift; sourceTree = "<group>"; };
 		8D2DBB409DDF9AE419764EFA /* Extensions.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		A61CC7569C1C2EB985431761 /* AppStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AppStore.swift; sourceTree = "<group>"; };
+		A7E42F33B9134B118B7D91D2 /* TaskFocusPieIcon.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskFocusPieIcon.swift; sourceTree = "<group>"; };
 		AD473AF3501705CEAA03D764 /* RootTabView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
 		B4AA1E5D8E761145206F08FC /* TodoModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoModels.swift; sourceTree = "<group>"; };
 		D3354589011D47986314B492 /* MonthView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MonthView.swift; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 			children = (
 				3C376E44067E72899DABFB23 /* CommonComponents.swift */,
 				FE6460C469AD623E933EE070 /* DonutChartView.swift */,
+				A7E42F33B9134B118B7D91D2 /* TaskFocusPieIcon.swift */,
 				5D9168539CEEEB854A4A3073 /* TodoRow.swift */,
 			);
 			path = Components;
@@ -306,6 +309,7 @@
 				F0A2A78239095E63BA328981 /* RootTabView.swift in Sources */,
 				FC32E2229ABA371D538BB949 /* CommonComponents.swift in Sources */,
 				AD720A1F3AF3BAE91DEBA909 /* DonutChartView.swift in Sources */,
+				D4C9F4B9D0E74E19A3B61C88 /* TaskFocusPieIcon.swift in Sources */,
 				251B4ECE11D207FF38A94411 /* TodoRow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

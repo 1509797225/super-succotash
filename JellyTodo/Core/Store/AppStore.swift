@@ -19,7 +19,7 @@ final class AppStore: ObservableObject {
 
     var preferredColorScheme: ColorScheme? {
         switch settings.themeMode {
-        case .pink, .blackWhite, .blue, .green:
+        case .pink, .blackWhite, .blue, .green, .rainbow:
             return .light
         }
     }
@@ -92,11 +92,18 @@ final class AppStore: ObservableObject {
         saveTodos()
     }
 
-    func updateTodoDetail(id: UUID, cycle: TodoTaskCycle, dailyDurationMinutes: Int, note: String) {
+    func updateTodoDetail(
+        id: UUID,
+        cycle: TodoTaskCycle,
+        dailyDurationMinutes: Int,
+        focusTimerDirection: FocusTimerDirection,
+        note: String
+    ) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
 
         todos[index].cycle = cycle
         todos[index].dailyDurationMinutes = min(max(dailyDurationMinutes, 5), 480)
+        todos[index].focusTimerDirection = focusTimerDirection
         todos[index].note = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
         todos[index].updatedAt = Date()
         saveTodos()
@@ -115,11 +122,19 @@ final class AppStore: ObservableObject {
         saveTodos()
     }
 
-    func startPomodoro(mode: PomodoroTimerMode, relatedTodoID: UUID? = nil) {
+    func startPomodoro(
+        mode: PomodoroTimerMode,
+        relatedTodoID: UUID? = nil,
+        durationSeconds: Int? = nil,
+        direction: FocusTimerDirection = .countDown
+    ) {
         timerCancellable?.cancel()
+        let totalSeconds = max(durationSeconds ?? mode.defaultDuration, 1)
         timerState.mode = mode
-        timerState.totalSeconds = mode.defaultDuration
-        timerState.remainingSeconds = mode.defaultDuration
+        timerState.direction = direction
+        timerState.totalSeconds = totalSeconds
+        timerState.remainingSeconds = direction == .countDown ? totalSeconds : 0
+        timerState.elapsedSeconds = direction == .countUp ? 0 : 0
         timerState.isRunning = true
         timerState.isPaused = false
         timerState.startedAt = Date()
@@ -237,6 +252,28 @@ final class AppStore: ObservableObject {
         ].filter { $0.value > 0 }
     }
 
+    func focusedSeconds(for todoID: UUID) -> Int {
+        pomodoroSessions
+            .filter { $0.type == .focus && $0.relatedTodoID == todoID }
+            .reduce(0) { $0 + $1.durationSeconds }
+    }
+
+    func todayTaskFocusSummaries() -> [TaskFocusSummary] {
+        let todayFocusSessions = pomodoroSessions.filter {
+            $0.type == .focus && $0.relatedTodoID != nil && Calendar.current.isDateInToday($0.endAt)
+        }
+        let grouped = Dictionary(grouping: todayFocusSessions) { $0.relatedTodoID }
+
+        return grouped.compactMap { key, sessions in
+            guard let todoID = key else { return nil }
+            guard let todo = todos.first(where: { $0.id == todoID }) else { return nil }
+            let seconds = sessions.reduce(0) { $0 + $1.durationSeconds }
+            return TaskFocusSummary(id: todoID, title: todo.title, seconds: seconds)
+        }
+        .filter { $0.seconds > 0 }
+        .sorted { $0.seconds > $1.seconds }
+    }
+
     private func beginTicking() {
         timerCancellable?.cancel()
         timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
@@ -245,11 +282,22 @@ final class AppStore: ObservableObject {
                 guard let self else { return }
                 guard self.timerState.isRunning else { return }
 
-                if self.timerState.remainingSeconds > 0 {
-                    self.timerState.remainingSeconds -= 1
+                switch self.timerState.direction {
+                case .countDown:
+                    if self.timerState.remainingSeconds > 0 {
+                        self.timerState.remainingSeconds -= 1
+                        self.timerState.elapsedSeconds = self.timerState.totalSeconds - self.timerState.remainingSeconds
+                    }
+                case .countUp:
+                    if self.timerState.elapsedSeconds < self.timerState.totalSeconds {
+                        self.timerState.elapsedSeconds += 1
+                        self.timerState.remainingSeconds = max(self.timerState.totalSeconds - self.timerState.elapsedSeconds, 0)
+                    }
                 }
 
-                if self.timerState.remainingSeconds <= 0 {
+                if self.timerState.direction == .countDown, self.timerState.remainingSeconds <= 0 {
+                    self.completePomodoro()
+                } else if self.timerState.direction == .countUp, self.timerState.elapsedSeconds >= self.timerState.totalSeconds {
                     self.completePomodoro()
                 }
             }
@@ -258,8 +306,10 @@ final class AppStore: ObservableObject {
     private func resetTimer(for mode: PomodoroTimerMode) {
         timerCancellable?.cancel()
         timerState.mode = mode
+        timerState.direction = .countDown
         timerState.totalSeconds = mode.defaultDuration
         timerState.remainingSeconds = mode.defaultDuration
+        timerState.elapsedSeconds = 0
         timerState.isRunning = false
         timerState.isPaused = false
         timerState.startedAt = nil

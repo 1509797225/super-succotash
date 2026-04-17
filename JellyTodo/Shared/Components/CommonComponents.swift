@@ -149,3 +149,74 @@ struct StatRow: View {
         .padding(.vertical, 4)
     }
 }
+
+struct JellyToolMenuAction: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    var isActive = false
+    let action: () -> Void
+}
+
+struct JellyToolMenu: View {
+    @Environment(\.appThemeMode) private var themeMode
+    @Binding var isExpanded: Bool
+
+    let actions: [JellyToolMenuAction]
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            if isExpanded {
+                VStack(spacing: 10) {
+                    ForEach(actions) { item in
+                        Button {
+                            item.action()
+                        } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: item.systemImage)
+                                    .font(.system(size: 18, weight: .bold))
+
+                                Text(item.title)
+                                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                                    .lineLimit(1)
+                            }
+                            .foregroundStyle(item.isActive ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
+                            .frame(width: 54, height: 54)
+                            .background(item.isActive ? ThemeTokens.accent(for: themeMode) : Color.clear)
+                            .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 6)
+                .background(ThemeTokens.card(for: themeMode).opacity(0.96))
+                .clipShape(Capsule())
+                .modifier(JellyCardModifier(shadowStyle: .standard))
+                .padding(.top, 60)
+                .transition(.asymmetric(
+                    insertion: .scale(scale: 0.82, anchor: .topTrailing).combined(with: .opacity),
+                    removal: .scale(scale: 0.92, anchor: .topTrailing).combined(with: .opacity)
+                ))
+            }
+
+            Button {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.78)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .frame(width: 52, height: 52)
+                    .background(ThemeTokens.card(for: themeMode))
+                    .clipShape(Circle())
+                    .modifier(JellyCardModifier(shadowStyle: .standard))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isExpanded ? "Close settings menu" : "Open settings menu")
+        }
+        .frame(width: 72, alignment: .topTrailing)
+        .animation(.spring(response: 0.28, dampingFraction: 0.78), value: isExpanded)
+    }
+}

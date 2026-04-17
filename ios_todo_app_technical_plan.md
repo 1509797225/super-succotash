@@ -154,6 +154,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var taskDate: Date
     var cycle: TodoTaskCycle
     var dailyDurationMinutes: Int
+    var focusTimerDirection: FocusTimerDirection
     var note: String
 }
 ```
@@ -168,12 +169,13 @@ struct TodoItem: Identifiable, Codable, Equatable {
 - `taskDate`：任务归属日期，用于 Today 筛选和 Month 分组
 - `cycle`：任务周期，用于详情页展示与后续计划扩展
 - `dailyDurationMinutes`：每天计划投入时长，单位分钟
+- `focusTimerDirection`：开始专注时的计时方向，支持倒计时和正计时
 - `note`：任务正文/备注内容
 
 兼容要求：
 
 - 新增字段必须有默认值，读取旧版本 `UserDefaults` 数据时不能闪退
-- 默认周期为 `Daily`，默认每天时长为 `25` 分钟，默认正文为空
+- 默认周期为 `Daily`，默认每天时长为 `25` 分钟，默认计时方向为 `Count Down`，默认正文为空
 
 ### 6.2 PomodoroSession
 
@@ -224,12 +226,13 @@ enum AppThemeMode: String, Codable, CaseIterable {
     case blackWhite
     case blue
     case green
+    case rainbow
 }
 ```
 
 说明：
 
-- Set 页支持四种基调：`Pink / Black White / Blue / Green`
+- Set 页支持五种基调：`Pink / Black White / Blue / Green / Rainbow`
 - `Black White` 为当前默认黑白灰视觉，历史 `pureWhite` 本地值兼容映射为 `Black White`
 - 主题色只作为轻量强调色使用，不破坏大面积纯白、浅灰、深灰的基础视觉
 - 右滑完成填充必须使用当前主题色
@@ -336,32 +339,71 @@ final class AppStore: ObservableObject {
 - `List` 必须隐藏系统分割线和默认背景，通过透明 row background 保留 Jelly 卡片视觉
 - 左滑展开后的 UI 必须保持自定义果冻胶囊按钮，不使用系统默认矩形 `swipeActions` 外观
 
-### 9.1.1 任务详情二级页
+### 9.1.1 任务操作半模态面板
 
 入口：
 
-- Today 页任务 Item 轻点进入
-- 页面使用 `NavigationLink` / `NavigationStack` 原生导航
+- Today / Month 页任务 Item 轻点打开从底部上滑的半模态面板
+- 不再通过轻点任务进入任务详情二级页
+- 半模态交互形态与 `New Task` 弹窗一致，点击空白处或下滑可关闭
 
-核心展示与编辑：
+面板结构：
 
-- 顶部展示任务标题与完成状态
-- `Task Cycle`：任务周期，支持 `Once / Daily / Weekly / Monthly`
-- `Daily Duration`：每天计划时长，按 5 分钟步进，范围 `5-480` 分钟
-- `Body`：正文区域，支持多行输入，纯白/浅灰卡片，32pt 圆角
-- 所有字段变更后通过 `AppStore.updateTodoDetail` 持久化
+- 第一行：任务标题，大字号粗体，居中展示，最多 3 行
+- 第二行：`Start Focus` 胶囊按钮
+- 第三行：`Edit` / `Delete` 两个胶囊按钮
+- 最后一行：`Focused` 已专注时长，支持点击在 `h / min / s` 三种单位间切换
 
-底部操作：
+行为：
 
-- 固定底部胶囊按钮：`Enter Pomodoro`
-- 点击后进入 `PomodoroStatsView`
-- 若当前没有正在运行/暂停的计时器，可携带当前任务 ID 作为 `relatedTodoID`，便于后续番茄记录与任务关联
+- `Start Focus` 关闭半模态后进入真正的沉浸式专注二级页
+- `Edit` 在当前半模态之上继续弹出小弹窗，编辑任务标题、任务周期、每日时长和计时方向
+- `Delete` 删除任务并关闭半模态
 
-交互约束：
+### 9.1.2 任务编辑小弹窗
 
-- 详情页不引入彩色状态
-- 输入控件保持灰白黑视觉，不使用系统蓝色强调
-- 正文为空时展示浅灰提示语，不影响保存
+入口：
+
+- 任务操作半模态面板第三行点击 `Edit`
+- 左滑任务 Item 露出 `Edit` 后点击
+
+内容：
+
+- 任务标题输入框
+- `Task Cycle`：默认 `Daily`，支持 `Once / Daily / Weekly / Monthly`
+- `Daily Duration`：每天计划时长，支持键盘输入，范围 `5-480` 分钟
+- `Timer Direction`：`Count Down / Count Up`，默认 `Count Down`
+
+说明：
+
+- `Daily Duration` 从旧二级页迁移到编辑弹窗
+- Count Down 默认按每日时长倒计时，默认值为 `25` 分钟
+- Count Up 从 `00:00` 正向计时，到每日时长后自动完成
+- 所有字段变更后通过 `AppStore` 持久化
+
+### 9.1.3 沉浸式专注页
+
+入口：
+
+- 任务操作半模态面板点击 `Start Focus`
+
+页面结构：
+
+- 真正的二级页，使用 `NavigationStack` 原生跳转
+- 沉浸式视觉，计时器数字为最主要元素
+- 显示关联任务标题、计时方向和目标时长
+- 支持暂停、继续、停止
+- 支持系统横竖屏切换，工程方向配置至少包含 Portrait / Landscape Left / Landscape Right
+- 停止为提前结束并丢弃，不写入统计
+- 计时正常完成后写入 `PomodoroSession`
+- 支持横竖屏自适应布局；横屏时计时器与操作区可左右排布
+- 支持时钟字体大小切换，默认大字号，可切换为超大字号
+
+计时规则：
+
+- 若任务计时方向为 `Count Down`：从 `dailyDurationMinutes` 倒计时至 `00:00`
+- 若任务计时方向为 `Count Up`：从 `00:00` 正计时至 `dailyDurationMinutes`
+- 默认任务每日时长为 `25` 分钟，默认方向为 `Count Down`
 
 ### 9.2 Month 页面
 
@@ -399,7 +441,7 @@ MVP 行为：
 
 #### Theme Section
 
-- 主题模式：Pink / Black White / Blue / Green
+- 主题模式：Pink / Black White / Blue / Green / Rainbow
 - 字体模式：默认大字开启，可切换
 
 #### App Preferences
@@ -415,6 +457,14 @@ MVP 行为：
 ### 9.4 Pomodoro Stats 页面
 
 这是 Today 页 icon 进入的二级页面。
+
+Today 右上角入口：
+
+- 不再使用静态系统 `chart.pie.fill` 图标
+- 使用自绘 3D 小饼图入口，数据与当天任务专注时长联动
+- 饼图按今日各任务 Focus Session 的 `durationSeconds` 占比切片，任务专注时长不同则比例不同
+- 无今日专注数据时展示空态灰色 3D 饼图
+- 点击 3D 饼图仍进入 `PomodoroStatsView`
 
 #### 页面内容
 

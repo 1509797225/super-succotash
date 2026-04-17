@@ -187,7 +187,7 @@ struct PomodoroStatsView: View {
 
     private var displayRemainingSeconds: Int {
         if store.timerState.isRunning || store.timerState.isPaused {
-            return store.timerState.remainingSeconds
+            return store.timerState.displaySeconds
         }
         return selectedMode.defaultDuration
     }
