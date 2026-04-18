@@ -220,7 +220,10 @@ final class AppStore: ObservableObject {
         direction: FocusTimerDirection = .countDown
     ) {
         timerCancellable?.cancel()
-        let totalSeconds = max(durationSeconds ?? mode.defaultDuration, 1)
+        let linkedDurationSeconds = relatedTodoID
+            .flatMap { id in todos.first(where: { $0.id == id })?.dailyDurationMinutes }
+            .map { max($0, 1) * 60 }
+        let totalSeconds = max(durationSeconds ?? linkedDurationSeconds ?? timerState.totalSeconds, 1)
         timerState.mode = mode
         timerState.direction = direction
         timerState.totalSeconds = totalSeconds
@@ -278,11 +281,8 @@ final class AppStore: ObservableObject {
 
         if timerState.mode == .focus {
             timerState.completedFocusCount += 1
-            let nextMode: PomodoroTimerMode = timerState.completedFocusCount.isMultiple(of: 4) ? .longBreak : .shortBreak
-            resetTimer(for: nextMode)
-        } else {
-            resetTimer(for: .focus)
         }
+        resetTimer(for: .focus)
 
         triggerHaptic()
     }
@@ -312,35 +312,52 @@ final class AppStore: ObservableObject {
         let focusSeconds = sessions
             .filter { $0.type == .focus }
             .reduce(0) { $0 + $1.durationSeconds }
-        let breakSeconds = sessions
-            .filter { $0.type != .focus }
-            .reduce(0) { $0 + $1.durationSeconds }
         let completedPomodoros = sessions.filter { $0.type == .focus }.count
         let goal = max(settings.pomodoroGoalPerDay, 1)
         let goalRate = min(Double(completedPomodoros) / Double(goal), 1)
 
         return PomodoroStats(
             focusSeconds: focusSeconds,
-            breakSeconds: breakSeconds,
             completedPomodoros: completedPomodoros,
             goalRate: goalRate
         )
     }
 
     func chartSegments(for range: PomodoroStatsRange) -> [DonutChartSegment] {
-        let sessions = sessions(in: range)
-        let focusValue = sessions.filter { $0.type == .focus }.reduce(0) { $0 + $1.durationSeconds }
-        let shortBreakValue = sessions.filter { $0.type == .shortBreak }.reduce(0) { $0 + $1.durationSeconds }
-        let longBreakValue = sessions.filter { $0.type == .longBreak }.reduce(0) { $0 + $1.durationSeconds }
+        focusSegments(for: range).enumerated().map { index, segment in
+            DonutChartSegment(
+                value: Double(segment.seconds),
+                label: segment.title,
+                opacity: max(1.0 - Double(index) * 0.14, 0.32)
+            )
+        }
+    }
 
-        let total = focusValue + shortBreakValue + longBreakValue
-        guard total > 0 else { return [] }
+    func focusSegments(for range: PomodoroStatsRange) -> [PlanFocusSegment] {
+        let focusSessions = sessions(in: range).filter { $0.type == .focus && $0.relatedTodoID != nil }
+        let grouped = Dictionary(grouping: focusSessions) { session -> UUID in
+            guard let todoID = session.relatedTodoID,
+                  let todo = todos.first(where: { $0.id == todoID })
+            else { return UUID(uuidString: "00000000-0000-0000-0000-000000000000")! }
 
-        return [
-            DonutChartSegment(value: Double(focusValue), label: "Focus", opacity: 1.0),
-            DonutChartSegment(value: Double(shortBreakValue), label: "Short Break", opacity: 0.72),
-            DonutChartSegment(value: Double(longBreakValue), label: "Long Break", opacity: 0.44)
-        ].filter { $0.value > 0 }
+            return todo.planTaskID ?? todo.id
+        }
+
+        return grouped.compactMap { key, sessions in
+            let seconds = sessions.reduce(0) { $0 + $1.durationSeconds }
+            guard seconds > 0 else { return nil }
+
+            let relatedTodos = sessions.compactMap { session in
+                session.relatedTodoID.flatMap { id in todos.first(where: { $0.id == id }) }
+            }
+            let title = planTasks.first(where: { $0.id == key })?.title
+                ?? relatedTodos.first?.title
+                ?? "Focus"
+            let itemCount = Set(relatedTodos.map(\.id)).count
+
+            return PlanFocusSegment(id: key, title: title, seconds: seconds, itemCount: itemCount)
+        }
+        .sorted { $0.seconds > $1.seconds }
     }
 
     func focusedSeconds(for todoID: UUID) -> Int {
@@ -364,6 +381,159 @@ final class AppStore: ObservableObject {
         .filter { $0.seconds > 0 }
         .sorted { $0.seconds > $1.seconds }
     }
+
+#if DEBUG
+    func seedPomodoroChartDebugData() {
+        seedDebugData(planCount: 6, itemsPerPlan: 4, sessionsPerTodo: 2, todayItemsPerPlan: 3)
+    }
+
+    func seedPomodoroChartPressureDebugData() {
+        seedDebugData(planCount: 10, itemsPerPlan: 5, sessionsPerTodo: 1, todayItemsPerPlan: 4)
+    }
+
+    func seedPlanTodayMediumPressureDebugData() {
+        seedDebugData(planCount: 12, itemsPerPlan: 10, sessionsPerTodo: 2, todayItemsPerPlan: 5)
+    }
+
+    func seedPlanTodayHeavyPressureDebugData() {
+        seedDebugData(planCount: 20, itemsPerPlan: 15, sessionsPerTodo: 2, todayItemsPerPlan: 6)
+    }
+
+    private func seedDebugData(
+        planCount: Int,
+        itemsPerPlan: Int,
+        sessionsPerTodo: Int,
+        todayItemsPerPlan: Int
+    ) {
+        clearPomodoroChartDebugData()
+
+        let now = Date()
+        let calendar = Calendar.current
+        let planTitles = [
+            "考研数学", "考研英语", "考研政治", "专业课一", "专业课二",
+            "产品设计", "SwiftUI 项目", "阅读计划", "健身恢复", "生活整理",
+            "算法训练", "写作输出", "英语听力", "财务复盘", "睡眠管理",
+            "摄影练习", "面试准备", "论文阅读", "副业计划", "周末清单"
+        ]
+        let taskTitles = [
+            "高数极限", "线代矩阵", "概率分布", "阅读精翻", "核心词汇",
+            "马原框架", "专业课真题", "数据结构", "操作系统", "UI 走查",
+            "交互复盘", "组件封装", "跑步训练", "力量拉伸", "房间整理",
+            "读书笔记", "文章草稿", "算法错题", "听力影子跟读", "预算记录",
+            "睡前复盘", "照片整理", "面试八股", "论文摘要", "周计划拆解"
+        ]
+        let cycles = TodoTaskCycle.allCases
+
+        var createdPlans: [PlanTask] = []
+        var createdTodos: [TodoItem] = []
+        var createdSessions: [PomodoroSession] = []
+
+        for planIndex in 0..<planCount {
+            let planTask = PlanTask(
+                id: UUID(),
+                title: planTitles[planIndex % planTitles.count],
+                createdAt: calendar.date(byAdding: .day, value: -planIndex, to: now) ?? now,
+                updatedAt: now,
+                isCollapsed: planIndex % 5 == 4
+            )
+            createdPlans.append(planTask)
+
+            for itemIndex in 0..<itemsPerPlan {
+                let globalIndex = planIndex * itemsPerPlan + itemIndex
+                let isToday = itemIndex < todayItemsPerPlan
+                let durationMinutes = 12 + ((globalIndex * 7 + planIndex * 5) % 72)
+                let taskDate = isToday ? now : (calendar.date(byAdding: .day, value: -(globalIndex % 28), to: now) ?? now)
+                let todo = TodoItem(
+                    id: UUID(),
+                    planTaskID: planTask.id,
+                    isAddedToToday: isToday,
+                    title: "\(taskTitles[globalIndex % taskTitles.count]) \(itemIndex + 1)",
+                    isCompleted: globalIndex % 6 == 0,
+                    createdAt: calendar.date(byAdding: .day, value: -globalIndex % 18, to: now) ?? now,
+                    updatedAt: now,
+                    taskDate: taskDate,
+                    cycle: cycles[globalIndex % cycles.count],
+                    dailyDurationMinutes: durationMinutes,
+                    focusTimerDirection: globalIndex % 3 == 0 ? .countUp : .countDown,
+                    note: Self.debugPomodoroSeedMarker
+                )
+                createdTodos.append(todo)
+
+                for sessionIndex in 0..<sessionsPerTodo {
+                    let dayOffset: Int
+                    if sessionIndex == 0, isToday {
+                        dayOffset = 0
+                    } else {
+                        dayOffset = -((globalIndex + sessionIndex * 5) % 30)
+                    }
+                    let hourOffset = -((globalIndex * 3 + sessionIndex * 7) % 20)
+                    let endAt = calendar.date(byAdding: .hour, value: hourOffset, to: calendar.date(byAdding: .day, value: dayOffset, to: now) ?? now) ?? now
+                    let sessionMinutes = max(8, durationMinutes - sessionIndex * 5 + planIndex % 9)
+                    createdSessions.append(
+                        PomodoroSession(
+                            id: UUID(),
+                            type: .focus,
+                            startAt: endAt.addingTimeInterval(TimeInterval(-sessionMinutes * 60)),
+                            endAt: endAt,
+                            durationSeconds: sessionMinutes * 60,
+                            relatedTodoID: todo.id
+                        )
+                    )
+                }
+            }
+        }
+
+        planTasks.append(contentsOf: createdPlans)
+        todos.append(contentsOf: createdTodos)
+        pomodoroSessions.append(contentsOf: createdSessions)
+
+        savePlanTasks()
+        saveTodos()
+        saveSessions()
+        triggerHaptic()
+    }
+
+    func clearPomodoroChartDebugData() {
+        let debugTodoIDs = Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.map(\.id))
+        let debugPlanIDs = Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.compactMap(\.planTaskID))
+
+        pomodoroSessions.removeAll { session in
+            session.relatedTodoID.map { debugTodoIDs.contains($0) } ?? false
+        }
+        todos.removeAll { $0.note == Self.debugPomodoroSeedMarker }
+        planTasks.removeAll { debugPlanIDs.contains($0.id) }
+
+        saveSessions()
+        saveTodos()
+        savePlanTasks()
+        triggerHaptic()
+    }
+
+    var debugPomodoroSeedSummary: (plans: Int, todos: Int, todayTodos: Int, sessions: Int, todaySeconds: Int) {
+        let debugTodoIDs = Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.map(\.id))
+        let debugTodayTodos = todos.filter {
+            $0.note == Self.debugPomodoroSeedMarker
+                && $0.isAddedToToday
+                && Calendar.current.isDateInToday($0.taskDate)
+        }.count
+        let sessions = pomodoroSessions.filter { session in
+            session.relatedTodoID.map { debugTodoIDs.contains($0) } ?? false
+        }
+        let todaySeconds = sessions
+            .filter { Calendar.current.isDateInToday($0.endAt) }
+            .reduce(0) { $0 + $1.durationSeconds }
+
+        return (
+            plans: Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.compactMap(\.planTaskID)).count,
+            todos: debugTodoIDs.count,
+            todayTodos: debugTodayTodos,
+            sessions: sessions.count,
+            todaySeconds: todaySeconds
+        )
+    }
+
+    private static let debugPomodoroSeedMarker = "debug-pomodoro-chart-seed"
+#endif
 
     private func beginTicking() {
         timerCancellable?.cancel()
@@ -396,10 +566,11 @@ final class AppStore: ObservableObject {
 
     private func resetTimer(for mode: PomodoroTimerMode) {
         timerCancellable?.cancel()
+        let totalSeconds = max(timerState.totalSeconds, 0)
         timerState.mode = mode
         timerState.direction = .countDown
-        timerState.totalSeconds = mode.defaultDuration
-        timerState.remainingSeconds = mode.defaultDuration
+        timerState.totalSeconds = totalSeconds
+        timerState.remainingSeconds = totalSeconds
         timerState.elapsedSeconds = 0
         timerState.isRunning = false
         timerState.isPaused = false

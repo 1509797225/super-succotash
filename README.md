@@ -13,7 +13,7 @@ GitHub 仓库：`1509797225/super-succotash`
 - `Focus`：任务级番茄钟专注页，支持正向/倒向计时、暂停、继续、停止。
 - `Landscape Focus`：Focus 页支持手动横竖屏切换，横屏隐藏底部 TabBar。
 - `Immersive Mode`：横屏下可进入沉浸式，只保留倒计时和退出按钮。
-- `Pomodoro Stats`：通过 Today 右上角饼图入口查看番茄钟统计。
+- `Pomodoro Stats`：通过 Today 右上角饼图入口查看内置计时器、3D 饼图和按 Plan 聚合的番茄统计。
 - `Themes`：支持灰度基调以及粉色、蓝色、绿色等主题基调。
 - `Language`：支持应用内 English / 简体中文切换，设置后本地持久化。
 
@@ -24,7 +24,7 @@ GitHub 仓库：`1509797225/super-succotash`
 - 架构：MVVM + 单向数据流
 - 导航：NavigationStack + TabView
 - 存储：UserDefaults + Codable
-- 图表：自绘 Donut / Pie 组件
+- 图表：自绘 Donut / 3D Pie 组件
 - 工程：单 Target 原生 Xcode iOS App
 
 ## 项目结构

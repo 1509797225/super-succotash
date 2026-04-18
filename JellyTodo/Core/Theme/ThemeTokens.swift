@@ -53,6 +53,7 @@ enum L10n {
         case enterTaskTitle
         case exit
         case focus
+        case focusPlans
         case focusTime
         case focused
         case focusing
@@ -69,6 +70,7 @@ enum L10n {
         case newTask
         case noFocusDataToday
         case noPomodoroData
+        case noPomodoroGuide
         case noPlansYet
         case pause
         case openSettingsMenu
@@ -129,6 +131,7 @@ enum L10n {
             case .enterTaskTitle: return "Enter task title"
             case .exit: return "Exit"
             case .focus: return "Focus"
+            case .focusPlans: return "Focus Plans"
             case .focusTime: return "Focus Time"
             case .focused: return "Focused"
             case .focusing: return "Focusing"
@@ -145,6 +148,7 @@ enum L10n {
             case .newTask: return "New Task"
             case .noFocusDataToday: return "No focus data today"
             case .noPomodoroData: return "No pomodoro data"
+            case .noPomodoroGuide: return "Complete a focus session to see stats"
             case .noPlansYet: return "No plans yet"
             case .pause: return "Pause"
             case .openSettingsMenu: return "Open settings menu"
@@ -207,6 +211,7 @@ enum L10n {
             case .enterTaskTitle: return "输入任务标题"
             case .exit: return "退出"
             case .focus: return "专注"
+            case .focusPlans: return "专注计划"
             case .focusTime: return "专注时长"
             case .focused: return "已专注"
             case .focusing: return "专注中"
@@ -223,6 +228,7 @@ enum L10n {
             case .newTask: return "新任务"
             case .noFocusDataToday: return "今日暂无专注数据"
             case .noPomodoroData: return "暂无番茄数据"
+            case .noPomodoroGuide: return "完成一次专注后查看统计"
             case .noPlansYet: return "还没有计划"
             case .pause: return "暂停"
             case .openSettingsMenu: return "打开设置菜单"

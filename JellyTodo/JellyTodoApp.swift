@@ -50,7 +50,12 @@ struct JellyTodoApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            ZStack(alignment: .topTrailing) {
+                RootTabView()
+#if DEBUG
+                DebugPomodoroSeedOverlay()
+#endif
+            }
                 .environmentObject(store)
                 .environment(\.appThemeMode, store.settings.themeMode)
                 .environment(\.appLanguage, store.settings.language)

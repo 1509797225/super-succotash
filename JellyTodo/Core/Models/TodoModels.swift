@@ -215,17 +215,6 @@ enum PomodoroTimerMode: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var defaultDuration: Int {
-        switch self {
-        case .focus:
-            return 25 * 60
-        case .shortBreak:
-            return 5 * 60
-        case .longBreak:
-            return 15 * 60
-        }
-    }
-
     var sessionType: PomodoroSessionType {
         switch self {
         case .focus:
@@ -433,8 +422,8 @@ struct PlanTaskSection: Identifiable, Equatable {
 struct PomodoroTimerState: Equatable {
     var mode: PomodoroTimerMode = .focus
     var direction: FocusTimerDirection = .countDown
-    var totalSeconds: Int = PomodoroTimerMode.focus.defaultDuration
-    var remainingSeconds: Int = PomodoroTimerMode.focus.defaultDuration
+    var totalSeconds: Int = 0
+    var remainingSeconds: Int = 0
     var elapsedSeconds: Int = 0
     var isRunning = false
     var isPaused = false
@@ -464,13 +453,11 @@ struct PomodoroTimerState: Equatable {
 
 struct PomodoroStats: Equatable {
     let focusSeconds: Int
-    let breakSeconds: Int
     let completedPomodoros: Int
     let goalRate: Double
 
     static let empty = PomodoroStats(
         focusSeconds: 0,
-        breakSeconds: 0,
         completedPomodoros: 0,
         goalRate: 0
     )
@@ -481,6 +468,13 @@ struct DonutChartSegment: Identifiable, Equatable {
     let value: Double
     let label: String
     let opacity: Double
+}
+
+struct PlanFocusSegment: Identifiable, Equatable {
+    let id: UUID
+    let title: String
+    let seconds: Int
+    let itemCount: Int
 }
 
 struct TaskFocusSummary: Identifiable, Equatable {

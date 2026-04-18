@@ -32,14 +32,14 @@
 
 - Today 页右上角新增一个小型饼状图 icon
 - 点击后进入二级页：`Pomodoro Stats`
-- 页面职责：展示番茄钟统计饼状图、专注时长、完成番茄数量、休息占比等
+- 页面职责：展示内置番茄计时器、3D 立体饼图、总专注时长、专注计划数、完成番茄数量、目标完成率等
 
 ### 2.3 MVP 功能范围
 
 - Todo 任务新增、编辑、删除、完成切换
 - Plan / Today / Set 三个一级页面
 - Today 页顶部番茄钟统计入口
-- 完整番茄钟计时能力（Focus / Short Break / Long Break）
+- 完整番茄钟计时能力，时长来自任务自身的 `Daily Duration`，不再使用固定 Focus / Short Break / Long Break 时长配置
 - 本地任务持久化
 - 本地设置持久化
 - 本地番茄钟统计持久化
@@ -104,7 +104,7 @@
 
 - 最低兼容 iOS 16
 - 不依赖 iOS 17+ 独占的扇形图快捷 API
-- 番茄钟饼状图采用自定义 `Shape` 或 `Canvas` 绘制，以保证 iOS 16 可用
+- 番茄钟统计图采用自定义 `Shape` 绘制 3D 立体饼图，以保证 iOS 16 可用
 
 ## 5. 核心模块拆分
 
@@ -406,7 +406,7 @@ final class AppStore: ObservableObject {
 说明：
 
 - `Daily Duration` 从旧二级页迁移到编辑弹窗
-- Count Down 默认按每日时长倒计时，默认值为 `25` 分钟
+- Count Down 按任务自己的 `Daily Duration` 倒计时，不再读取全局固定番茄时长
 - Count Up 从 `00:00` 正向计时，到每日时长后自动完成
 - 所有字段变更后通过 `AppStore` 持久化
 
@@ -438,7 +438,8 @@ final class AppStore: ObservableObject {
 
 - 若任务计时方向为 `Count Down`：从 `dailyDurationMinutes` 倒计时至 `00:00`
 - 若任务计时方向为 `Count Up`：从 `00:00` 正计时至 `dailyDurationMinutes`
-- 默认任务每日时长为 `25` 分钟，默认方向为 `Count Down`
+- 任务时长由任务编辑弹窗维护；番茄钟本身不提供 `25/5/15` 固定时长配置
+- 默认方向为 `Count Down`
 
 ### 9.2 Plan 页面
 
@@ -509,47 +510,46 @@ Today 右上角入口：
 
 #### 页面内容
 
-- 页面顶部主卡集成番茄钟计时器，不新增独立一级页面
 - 顶部标题：`Pomodoro Stats`
-- 中央大尺寸饼状图
-- 下方数字统计
-- 底部时间维度切换：Today / Week / Month
+- 标题下方集成番茄计时器，不新增独立页面
+- 中部为大尺寸 3D 立体饼图，作为页面主视觉
+- 饼图下方为四项固定数字统计区
+- 最底部为时间维度切换：Today / Week / Month
 
 #### 计时器规则
 
-- Focus：25 分钟
-- Short Break：5 分钟
-- Long Break：15 分钟
-- 每完成 4 个 Focus 后，下一个休息自动切换为 Long Break
+- 完全删除固定时长配置，不再内置 `25min Focus / 5min Short Break / 15min Long Break`
+- 计时时长来自关联任务的 `Daily Duration`
+- 计时方向来自关联任务的 `Timer Direction`
 - 计时器支持开始、暂停、继续、丢弃
 - 正常完成后写入 `PomodoroSession`
 - 丢弃不会写入统计数据
 
-#### 建议统计项
+#### 固定统计项
 
 | 项目 | 说明 |
 | --- | --- |
-| Focus Time | 专注总时长 |
-| Break Time | 休息总时长 |
+| Total Focus Time | 总专注时长 |
+| Focus Plans | 产生专注记录的计划数量 |
 | Completed Pomodoros | 完成番茄数 |
-| Goal Rate | 今日目标达成率 |
+| Goal Rate | 目标完成率 |
 
-#### 饼状图数据分层
+#### 3D 饼图数据分层
 
-- 专注时长
-- 短休息时长
-- 长休息时长
+- 不同颜色区分不同 Plan 的专注时段
+- 分区比例由各 Plan 关联 Focus Session 的 `durationSeconds` 聚合得到
+- 无 Plan 归属的任务按任务标题单独聚合
+- 样式必须为 3D 立体饼图，包含细描边、厚度层、阴影和轻微错落分层
 
-由于当前视觉系统禁止彩色，建议通过以下方式区分扇区：
+颜色策略：
 
-- 深灰实色
-- 中灰实色
-- 浅灰实色
-- 配合不同透明度和细描边区分
+- 黑白主题下使用不同灰度区分分区
+- 彩色主题下允许使用当前主题色、深灰、浅灰、主题浅色等有限色阶区分分区
+- 不使用系统默认高饱和图表颜色
 
 #### 空状态
 
-- 图表区域显示浅灰空环
+- 图表区域显示浅灰 3D 空饼图
 - 中心文案：`No pomodoro data`
 - 下方引导文案：`Complete a focus session to see stats`
 
@@ -757,13 +757,18 @@ UI 说明：
 ┌────────────────────────────────────┐
 │ Pomodoro Stats                     │
 │                                    │
-│             ◜██████◝               │
-│           ██  68%   ██             │
-│             ◟████◞                 │
+│ Timer                              │
+│ Focus task                 25:00   │
+│ [ Start Focus ]                    │
 │                                    │
-│ Focus Time           125 min       │
-│ Break Time            35 min       │
-│ Completed                5         │
+│            ◜██████◝                │
+│          ██▒▒▒▓▓██                 │
+│            ◟████◞                  │
+│                                    │
+│ Total Focus Time     125 min       │
+│ Focus Plans                3       │
+│ Completed Pomodoros        5       │
+│ Goal Rate                83%       │
 │                                    │
 │        Today   Week   Month        │
 └────────────────────────────────────┘
@@ -771,9 +776,10 @@ UI 说明：
 
 UI 说明：
 
-- 饼图居中，占据页面核心焦点
-- 中心可显示百分比或番茄数
-- 下方数据卡使用大字号统计展示
+- 页面从上到下固定为标题、内置计时器、3D 立体饼图、四项数字统计、时间切换
+- 3D 饼图居中，占据页面核心焦点
+- 3D 饼图按不同 Plan 的专注时长分区，带细描边、层叠厚度、错落切片和阴影
+- 下方四项统计卡使用大字号展示
 - 时间粒度切换使用胶囊分段控件风格
 
 ### 11.6 新增 / 编辑任务弹窗 UI
@@ -824,15 +830,17 @@ struct JellyCardModifier: ViewModifier {
 
 由于最低版本为 iOS 16，推荐方案：
 
-1. 使用自定义 `DonutChartView`
-2. 输入各分段时长占比
-3. 用 `Path` 绘制圆弧段
-4. 中心区域展示百分比或专注分钟数
+1. 使用自定义 `Pie3DChartView`
+2. 输入按 Plan 聚合后的 `PlanFocusSegment`
+3. 用 `Shape` 绘制扇形切片，并通过多层纵向偏移模拟 3D 厚度
+4. 顶层增加细描边、高光、阴影和轻微切片错落
+5. 无数据时展示空 3D 饼图和固定空状态文案
 
 优点：
 
 - 无需额外三方库
 - 兼容 iOS 16
+- 可以跟随当前主题做灰度或低饱和主题色分区
 - 视觉风格可完全受控
 
 ## 13. 开发排期建议
@@ -857,7 +865,7 @@ struct JellyCardModifier: ViewModifier {
 ### Phase 4
 
 - 完成 Pomodoro Stats 二级页
-- 完成自绘饼图
+- 完成自绘 3D 立体饼图
 - 完成统计聚合逻辑
 
 ### Phase 5
@@ -876,7 +884,8 @@ struct JellyCardModifier: ViewModifier {
 - 完成状态切换正常
 - Plan item 左滑加入 Today 后，Today 列表同步出现同一条 item
 - Set 页设置修改后重启仍生效
-- Pomodoro Stats 页面可正确展示空状态和统计状态
+- Pomodoro Stats 页面可正确展示 3D 空状态和按 Plan 聚合后的统计状态
+- 番茄钟不再使用固定 `25/5/15` 时长，计时目标来自任务 `Daily Duration`
 
 ### 14.2 UI 测试
 
@@ -896,13 +905,13 @@ struct JellyCardModifier: ViewModifier {
 ### 15.1 新增验收项
 
 - Today 页右上角存在饼状图 icon 且点击可进入二级页
-- Pomodoro Stats 页面可展示饼图、关键统计数据、时间维度切换
+- Pomodoro Stats 页面可展示内置计时器、3D 立体饼图、四项关键统计数据、时间维度切换
 - 第三个 Tab 已从 `Total` 更换为 `Set`
 - Set 页至少包含个人资料、主题设置、应用偏好、关于四个区块
 
 ### 15.2 视觉验收补充
 
-- 番茄钟统计页依旧遵循纯灰白体系
+- 番茄钟统计页在黑白主题下遵循纯灰白体系，在彩色主题下只允许低饱和主题色用于饼图分区和控件状态
 - Set 页不能出现彩色开关风格污染整体视觉
 - 图标、文字、卡片尺寸统一，保持“大字体、大 Item、低密度”
 
