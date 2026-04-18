@@ -94,146 +94,211 @@ private struct ProfileEditorSheet: View {
 struct SetView: View {
     @EnvironmentObject private var store: AppStore
     @State private var showingProfileEditor = false
+    @State private var showingThemePicker = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: ThemeTokens.Metrics.sectionSpacing) {
-                profileSection
-                themeSection
-                preferenceSection
-                aboutSection
+            VStack(alignment: .leading, spacing: 26) {
+                Text("设置")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .padding(.top, 26)
+
+                plusCard
+
+                settingsLabel("个人主页")
+                profileRow
+
+                settingsLabel("基础设置")
+                baseSettingsGroup
+
+                settingsLabel("关于")
+                aboutGroup
             }
             .padding(.horizontal, ThemeTokens.Metrics.horizontalPadding)
-            .padding(.top, 24)
-            .padding(.bottom, 32)
+            .padding(.bottom, 40)
         }
-        .background(ThemeTokens.background(for: store.settings.themeMode).ignoresSafeArea())
-        .navigationTitle("Set")
-        .navigationBarTitleDisplayMode(.large)
+        .background(settingsBackground.ignoresSafeArea())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingProfileEditor) {
             ProfileEditorSheet(profile: store.profile) { profile in
                 store.updateProfile(profile)
             }
         }
-    }
-
-    private var profileSection: some View {
-        SectionCard(title: "Profile") {
-            HStack(spacing: 18) {
-                Circle()
-                    .fill(ThemeTokens.accentSoft(for: store.settings.themeMode))
-                    .frame(width: 78, height: 78)
-                    .overlay(
-                        Text(initials)
-                            .font(ThemeTokens.Typography.sectionTitle)
-                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
-                    )
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(store.profile.nickname.isEmpty ? "Jelly User" : store.profile.nickname)
-                        .font(ThemeTokens.Typography.sectionTitle)
-                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
-
-                    Text(store.profile.signature.isEmpty ? "Focus on less, do more" : store.profile.signature)
-                        .font(ThemeTokens.Typography.body)
-                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                        .lineLimit(2)
-
-                    Text("Daily Goal \(store.profile.dailyGoal)")
-                        .font(ThemeTokens.Typography.body)
-                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                }
-
-                Spacer(minLength: 12)
-            }
-
-            CapsuleButton(title: "Edit Profile") {
-                showingProfileEditor = true
-            }
-        }
-    }
-
-    private var themeSection: some View {
-        SectionCard(title: "Theme") {
+        .confirmationDialog("Theme", isPresented: $showingThemePicker, titleVisibility: .visible) {
             ForEach(AppThemeMode.allCases) { mode in
-                Button {
+                Button(mode.title) {
                     var updated = store.settings
                     updated.themeMode = mode
                     store.updateSettings(updated)
-                } label: {
-                    HStack(spacing: 14) {
-                        Circle()
-                            .fill(ThemeTokens.accent(for: mode))
-                            .frame(width: 24, height: 24)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(ThemeTokens.Colors.textPrimary.opacity(0.08), lineWidth: 1)
-                            )
-
-                        Text(mode.title)
-                            .font(ThemeTokens.Typography.body)
-                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
-
-                        Spacer()
-
-                        if store.settings.themeMode == mode {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(ThemeTokens.Colors.textPrimary)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                }
-                .buttonStyle(.plain)
-
-                if mode != AppThemeMode.allCases.last {
-                    Divider()
-                        .overlay(ThemeTokens.Colors.subtleLine)
                 }
             }
-
-            Divider()
-                .overlay(ThemeTokens.Colors.subtleLine)
-                .padding(.vertical, 4)
-
-            Toggle(isOn: Binding(
-                get: { store.settings.useLargeText },
-                set: { newValue in
-                    var updated = store.settings
-                    updated.useLargeText = newValue
-                    store.updateSettings(updated)
-                }
-            )) {
-                Text("Large Text")
-                    .font(ThemeTokens.Typography.body)
-                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
-            }
-            .tint(ThemeTokens.accent(for: store.settings.themeMode))
         }
     }
 
-    private var preferenceSection: some View {
-        SectionCard(title: "Preferences") {
-            Toggle(isOn: Binding(
-                get: { store.settings.hapticsEnabled },
-                set: { newValue in
-                    var updated = store.settings
-                    updated.hapticsEnabled = newValue
-                    store.updateSettings(updated)
+    private var settingsBackground: Color {
+        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.backgroundSoft : ThemeTokens.background(for: store.settings.themeMode)
+    }
+
+    private var plusCard: some View {
+        Button {
+            showingProfileEditor = true
+        } label: {
+            HStack(spacing: 18) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("JellyTodo PLUS")
+                        .font(.system(size: 18, weight: .black, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    Text("解锁专注计划和统计玩法")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
                 }
-            )) {
-                Text("Haptics")
-                    .font(ThemeTokens.Typography.body)
-                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                Spacer()
+
+                Circle()
+                    .fill(ThemeTokens.Colors.subtleLine)
+                    .frame(width: 48, height: 48)
+                    .overlay(
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 16, weight: .black))
+                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    )
             }
-            .tint(ThemeTokens.accent(for: store.settings.themeMode))
+            .padding(.horizontal, 20)
+            .frame(height: 86)
+            .background(ThemeTokens.Colors.backgroundPrimary)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
 
-            Divider()
-                .overlay(ThemeTokens.Colors.subtleLine)
-                .padding(.vertical, 4)
+    private var profileRow: some View {
+        Button {
+            showingProfileEditor = true
+        } label: {
+            HStack(spacing: 14) {
+                settingIcon(systemName: "person.crop.circle.fill")
 
-            HStack {
-                Text("Pomodoro Goal")
-                    .font(ThemeTokens.Typography.body)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(store.profile.nickname.isEmpty ? "像素用户" : store.profile.nickname)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                        .lineLimit(1)
+
+                    if !store.profile.signature.isEmpty {
+                        Text(store.profile.signature)
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                            .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 66)
+            .background(ThemeTokens.Colors.backgroundPrimary)
+            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var baseSettingsGroup: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 14) {
+                settingIcon(systemName: "circle.lefthalf.filled")
+                Text("外观")
+                    .font(settingFont)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    ForEach([AppThemeMode.blackWhite, .pink, .blue, .green], id: \.id) { mode in
+                        Button {
+                            var updated = store.settings
+                            updated.themeMode = mode
+                            store.updateSettings(updated)
+                        } label: {
+                            Circle()
+                                .fill(ThemeTokens.accent(for: mode))
+                                .frame(width: 24, height: 24)
+                                .overlay(
+                                    Circle()
+                                        .stroke(store.settings.themeMode == mode ? ThemeTokens.Colors.textPrimary : Color.clear, lineWidth: 2)
+                                )
+                                .frame(width: 36, height: 28)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 34)
+                .background(ThemeTokens.Colors.card)
+                .clipShape(Capsule())
+            }
+            .settingRowFrame()
+
+            settingDivider
+
+            Button {
+                showingThemePicker = true
+            } label: {
+                settingLine(
+                    icon: "target",
+                    title: "主题",
+                    value: store.settings.themeMode.title,
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            settingLine(icon: "app.badge.fill", title: "应用图标", badge: "PLUS", showsChevron: true)
+
+            settingDivider
+
+            HStack(spacing: 14) {
+                settingIcon(systemName: "waveform.path")
+
+                Text("触觉反馈")
+                    .font(settingFont)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { store.settings.hapticsEnabled },
+                    set: { newValue in
+                        var updated = store.settings
+                        updated.hapticsEnabled = newValue
+                        store.updateSettings(updated)
+                    }
+                ))
+                .labelsHidden()
+                .tint(ThemeTokens.Colors.textPrimary)
+            }
+            .settingRowFrame()
+
+            settingDivider
+
+            settingLine(icon: "globe", title: "语言", value: "简体中文（中国）", showsChevron: true)
+
+            settingDivider
+
+            HStack(spacing: 14) {
+                settingIcon(systemName: "timer")
+
+                Text("番茄目标")
+                    .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
                 Spacer()
@@ -249,8 +314,8 @@ struct SetView: View {
                     .buttonStyle(.plain)
 
                     Text("\(store.settings.pomodoroGoalPerDay)")
-                        .font(ThemeTokens.Typography.sectionTitle)
-                        .frame(minWidth: 28)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .frame(minWidth: 26)
 
                     Button {
                         var updated = store.settings
@@ -263,24 +328,128 @@ struct SetView: View {
                 }
                 .foregroundStyle(ThemeTokens.Colors.textPrimary)
             }
+            .settingRowFrame()
+
+            settingDivider
+
+            HStack(spacing: 14) {
+                settingIcon(systemName: "textformat.size")
+
+                Text("大字体")
+                    .font(settingFont)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { store.settings.useLargeText },
+                    set: { newValue in
+                        var updated = store.settings
+                        updated.useLargeText = newValue
+                        store.updateSettings(updated)
+                    }
+                ))
+                .labelsHidden()
+                .tint(ThemeTokens.Colors.textPrimary)
+            }
+            .settingRowFrame()
         }
+        .background(ThemeTokens.Colors.backgroundPrimary)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
-    private var aboutSection: some View {
-        SectionCard(title: "About") {
-            StatRow(title: "Version", value: "1.0")
-            Divider()
-                .overlay(ThemeTokens.Colors.subtleLine)
-                .padding(.vertical, 4)
-            Text("Pure white, big type, soft jelly cards, and only the essentials.")
-                .font(ThemeTokens.Typography.body)
-                .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private var aboutGroup: some View {
+        VStack(spacing: 0) {
+            settingLine(icon: "sparkles", title: "设计理念", value: "Big Jelly")
+            settingDivider
+            settingLine(icon: "number", title: "版本", value: "1.0")
         }
+        .background(ThemeTokens.Colors.backgroundPrimary)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var settingFont: Font {
+        .system(size: 18, weight: .bold, design: .rounded)
+    }
+
+    private var settingDivider: some View {
+        Rectangle()
+            .fill(ThemeTokens.Colors.subtleLine.opacity(0.75))
+            .frame(height: 1)
+            .padding(.leading, 62)
+    }
+
+    private func settingsLabel(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 14, weight: .bold, design: .rounded))
+            .foregroundStyle(ThemeTokens.Colors.textSecondary)
+            .padding(.leading, 2)
+            .padding(.bottom, -14)
+    }
+
+    private func settingLine(
+        icon: String,
+        title: String,
+        value: String? = nil,
+        badge: String? = nil,
+        showsChevron: Bool = false
+    ) -> some View {
+        HStack(spacing: 14) {
+            settingIcon(systemName: icon)
+
+            Text(title)
+                .font(settingFont)
+                .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+            if let badge {
+                Text(badge)
+                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.backgroundPrimary)
+                    .padding(.horizontal, 8)
+                    .frame(height: 18)
+                    .background(ThemeTokens.Colors.textPrimary)
+                    .clipShape(Capsule())
+            }
+
+            Spacer()
+
+            if let value {
+                Text(value)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                    .lineLimit(1)
+            }
+
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+            }
+        }
+        .settingRowFrame()
+    }
+
+    private func settingIcon(systemName: String) -> some View {
+        Circle()
+            .fill(ThemeTokens.Colors.subtleLine)
+            .frame(width: 36, height: 36)
+            .overlay(
+                Image(systemName: systemName)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+            )
     }
 
     private var initials: String {
         let trimmed = store.profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "JT" : String(trimmed.prefix(2)).uppercased()
+    }
+}
+
+private extension View {
+    func settingRowFrame() -> some View {
+        self
+            .padding(.horizontal, 14)
+            .frame(height: 58)
     }
 }

@@ -170,7 +170,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
 - `isCompleted`：完成状态
 - `createdAt`：创建时间
 - `updatedAt`：最近修改时间
-- `taskDate`：任务归属日期，用于 Today 筛选和 Month 分组；仅 `isAddedToToday = true` 时参与 Today/Month 展示
+- `taskDate`：任务归属日期；仅 `isAddedToToday = true` 且日期为今天时参与 Today 展示
 - `cycle`：任务周期，用于详情页展示与后续计划扩展
 - `dailyDurationMinutes`：每天计划投入时长，单位分钟
 - `focusTimerDirection`：开始专注时的计时方向，支持倒计时和正计时
@@ -313,7 +313,7 @@ final class AppStore: ObservableObject {
 ### 8.2 业务职责
 
 - 统一加载初始数据
-- 统一暴露 Today 列表、Today 内 Month 分组、Plan 任务组、番茄统计、设置状态
+- 统一暴露 Today 列表、Plan 任务组、番茄统计、设置状态
 - 统一暴露任务详情更新能力，页面不得直接写入 `UserDefaults`
 - 统一触发保存逻辑
 - 避免多个页面各自直接操作 `UserDefaults`
@@ -333,11 +333,6 @@ final class AppStore: ObservableObject {
 
 - 展示 `taskDate` 属于今天的任务
 - 列表按 `createdAt` 升序排序
-- Today 页顶部提供 `Today / Month` 胶囊切换
-- 切到 Month 视图时，Today Tab 文案临时变为 `Month`
-- Month 视图展示当前自然月全部 item，按日期分组
-- Month 视图日期标题支持点击折叠/展开
-- Month 视图 item 使用小号卡片，不使用右滑注水完成动效
 - 单个 Item 高度 `100pt`
 - 左右边距 `16pt`
 - 卡片间距 `20pt`
@@ -442,8 +437,9 @@ final class AppStore: ObservableObject {
 - 第一个底部 Tab 固定为 `Plan`，不再是 `Month`
 - Plan 页展示一级任务组 `PlanTask`
 - 每个任务组可折叠/展开
-- 任务组下可新增 item
+- 任务组下可新增 item；新增 item 使用和 Today 任务一致的完整编辑弹窗，必须支持任务标题、周期、每日时长、计时方向
 - item 使用小号 Todo 风格卡片，但不带右滑注水完成动效
+- Plan item 不使用圆形勾选 icon，右侧直接展示周期、每日时长、计时方向等关键信息
 - item 左滑露出 `Today` 胶囊按钮，点击后把该 item 加入 Today
 - 加入 Today 的实现是更新同一条 `TodoItem.isAddedToToday = true` 且 `taskDate = Date()`，Today 与 Plan 数据必须同步
 
@@ -455,38 +451,40 @@ final class AppStore: ObservableObject {
 
 ### 9.3 Set 页面
 
-Set 页为新的第三个一级 Tab，结构建议如下：
+Set 页为第三个一级 Tab，UI 参考移动系统设置首页：
 
-1. Profile Card
-2. Theme Section
-3. App Preferences Section
-4. About Section
+1. 顶部自定义大标题 `设置`
+2. PLUS 入口卡
+3. 个人主页卡
+4. 基础设置分组
+5. 关于分组
 
-#### Profile Card
+#### Profile Card / 个人主页
 
-- 展示头像占位圆形块
+- 展示圆形头像 icon
 - 昵称
-- 个性签名
-- 每日目标番茄数
+- 个性签名，若为空不强行占位
+- 右侧 chevron
 
 MVP 行为：
 
 - 点击进入本地资料编辑页
 - 仅修改昵称、签名、每日目标
 
-#### Theme Section
+#### Base Settings
 
-- 主题模式：Pink / Black White / Blue / Green / Rainbow
-- 字体模式：默认大字开启，可切换
-
-#### App Preferences
-
-- 震动反馈开关
-- 默认番茄目标
+- `外观`：右侧提供多个主题圆点快捷切换
+- `主题`：展示当前主题，点击可选择 Pink / Black White / Blue / Green / Rainbow
+- `应用图标`：预留 PLUS 标识
+- `触觉反馈`：开关
+- `语言`：展示 `简体中文（中国）`
+- `番茄目标`：支持加减
+- `大字体`：开关
 
 #### About Section
 
 - App 版本
+- 设计理念
 - 设计理念说明
 
 ### 9.4 Pomodoro Stats 页面
@@ -716,30 +714,34 @@ UI 说明：
 
 ```text
 ┌────────────────────────────────────┐
-│ Set                                │
+│ 设置                               │
 │                                    │
-│ [ Avatar ]  Zhang                  │
-│            Focus on less, do more  │
-│            Daily Goal 4            │
+│ JellyTodo PLUS                >    │
+│ 解锁专注计划和统计玩法             │
 │                                    │
-│ Theme                              │
-│ Pure White                    >    │
-│ Large Text                    On   │
+│ 个人主页                           │
+│ ◎ 像素用户                    >    │
 │                                    │
-│ Preferences                        │
-│ Haptics                       On   │
-│ Pomodoro Goal                 4    │
+│ 基础设置                           │
+│ ◐ 外观             ○ ○ ○ ○         │
+│ ◎ 主题          Black White   >    │
+│ ◉ 应用图标       PLUS         >    │
+│ ≋ 触觉反馈                    On   │
+│ ◎ 语言          简体中文      >    │
+│ ◷ 番茄目标       - 4 +             │
 │                                    │
 │ About                              │
-│ Version                        1.0 │
+│ 设计理念          Big Jelly        │
+│ 版本              1.0              │
 └────────────────────────────────────┘
 ```
 
 UI 说明：
 
-- 顶部个人资料卡片更大更柔和，延续果冻感
-- 设置项为整行大按钮，方便点按
-- 页面仍然维持纯灰白体系
+- 页面背景使用浅灰，卡片使用白色，接近系统设置首页
+- 分组外圆角约 24pt，行内左侧统一圆形 icon
+- 设置项为整行大按钮，右侧承载 chevron、开关、数值或胶囊 badge
+- 主题色仍只作为控件状态或小圆点展示，不破坏整体灰白体系
 
 ### 11.5 Pomodoro Stats 页面 UI
 
@@ -864,7 +866,7 @@ struct JellyCardModifier: ViewModifier {
 - 编辑任务成功并刷新
 - 删除任务成功并重新排序
 - 完成状态切换正常
-- Month 分组正确
+- Plan item 左滑加入 Today 后，Today 列表同步出现同一条 item
 - Set 页设置修改后重启仍生效
 - Pomodoro Stats 页面可正确展示空状态和统计状态
 

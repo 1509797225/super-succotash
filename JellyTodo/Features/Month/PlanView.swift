@@ -114,9 +114,15 @@ struct PlanView: View {
                 }
             )
         ) {
-            TodoEditorSheet(title: "New Item", confirmTitle: "Add") { title in
+            TodoEditorSheet(title: "New Item", confirmTitle: "Add", showsFocusSettings: true) { result in
                 if let addingItemTaskID {
-                    store.addPlanItem(title: title, to: addingItemTaskID)
+                    store.addPlanItem(
+                        title: result.title,
+                        to: addingItemTaskID,
+                        cycle: result.cycle,
+                        dailyDurationMinutes: result.dailyDurationMinutes,
+                        focusTimerDirection: result.focusTimerDirection
+                    )
                 }
             }
         }

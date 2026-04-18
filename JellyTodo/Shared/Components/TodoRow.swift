@@ -262,15 +262,7 @@ struct CompactTodoRow: View {
 
     private func compactCard(width: CGFloat) -> some View {
         JellyCard(shadowStyle: .listItem) {
-            HStack(spacing: 12) {
-                Circle()
-                    .fill(item.isCompleted ? ThemeTokens.accent(for: themeMode).opacity(0.5) : ThemeTokens.Colors.backgroundPrimary)
-                    .frame(width: 26, height: 26)
-                    .overlay(
-                        Circle()
-                            .stroke(ThemeTokens.Colors.textSecondary.opacity(0.42), lineWidth: 1.5)
-                    )
-
+            HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.title)
                         .font(.system(size: 21, weight: .bold, design: .rounded))
@@ -287,6 +279,18 @@ struct CompactTodoRow: View {
                 }
 
                 Spacer()
+
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(item.cycle.title)
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .lineLimit(1)
+
+                    HStack(spacing: 6) {
+                        compactInfoPill("\(item.dailyDurationMinutes)m")
+                        compactInfoPill(item.focusTimerDirection.shortTitle)
+                    }
+                }
             }
             .padding(.horizontal, 18)
             .frame(width: width, height: 72)
@@ -317,6 +321,17 @@ struct CompactTodoRow: View {
                 actionReveal = actionReveal > 42 ? actionWidth : 0
                 dragStartActionReveal = 0
             }
+    }
+
+    private func compactInfoPill(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(ThemeTokens.Colors.textSecondary)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(ThemeTokens.Colors.backgroundPrimary.opacity(0.82))
+            .clipShape(Capsule())
     }
 }
 

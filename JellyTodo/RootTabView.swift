@@ -9,7 +9,6 @@ private enum AppTab: Hashable {
 struct RootTabView: View {
     @Environment(\.appThemeMode) private var themeMode
     @State private var selectedTab: AppTab = .today
-    @State private var todayTabTitle = "Today"
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -22,10 +21,10 @@ struct RootTabView: View {
             .tag(AppTab.plan)
 
             NavigationStack {
-                TodayView(tabTitle: $todayTabTitle)
+                TodayView()
             }
             .tabItem {
-                Label(todayTabTitle, systemImage: todayTabTitle == "Month" ? "calendar" : "sun.max")
+                Label("Today", systemImage: "sun.max")
             }
             .tag(AppTab.today)
 

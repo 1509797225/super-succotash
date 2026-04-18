@@ -1,5 +1,13 @@
 import Foundation
 
+struct StorageSnapshot {
+    var todos: [TodoItem]
+    var planTasks: [PlanTask]
+    var pomodoroSessions: [PomodoroSession]
+    var profile: UserProfile
+    var settings: AppSettings
+}
+
 struct StorageClient {
     private let defaults: UserDefaults
     private let encoder = JSONEncoder()
@@ -27,5 +35,15 @@ struct StorageClient {
     func save<T: Codable>(_ value: T, for key: Key) {
         guard let data = try? encoder.encode(value) else { return }
         defaults.set(data, forKey: key.rawValue)
+    }
+
+    func loadSnapshot() -> StorageSnapshot {
+        StorageSnapshot(
+            todos: load([TodoItem].self, for: .todos) ?? [],
+            planTasks: load([PlanTask].self, for: .planTasks) ?? [],
+            pomodoroSessions: load([PomodoroSession].self, for: .pomodoroSessions) ?? [],
+            profile: load(UserProfile.self, for: .userProfile) ?? .default,
+            settings: load(AppSettings.self, for: .appSettings) ?? .default
+        )
     }
 }

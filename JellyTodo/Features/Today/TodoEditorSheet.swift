@@ -35,6 +35,24 @@ struct TodoEditorSheet: View {
         _focusTimerDirection = State(initialValue: .countDown)
     }
 
+    init(
+        title: String,
+        initialText: String = "",
+        confirmTitle: String,
+        showsFocusSettings: Bool,
+        onConfirm: @escaping (TodoEditorResult) -> Void
+    ) {
+        self.title = title
+        self.initialText = initialText
+        self.confirmTitle = confirmTitle
+        self.showsFocusSettings = showsFocusSettings
+        self.onConfirm = onConfirm
+        _text = State(initialValue: initialText)
+        _cycle = State(initialValue: .daily)
+        _durationText = State(initialValue: "25")
+        _focusTimerDirection = State(initialValue: .countDown)
+    }
+
     init(title: String, todo: TodoItem, confirmTitle: String, onConfirm: @escaping (TodoEditorResult) -> Void) {
         self.title = title
         self.initialText = todo.title

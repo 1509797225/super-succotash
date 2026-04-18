@@ -12,10 +12,10 @@ final class AppStore: ObservableObject {
 
     private let storage: StorageClient
     private var timerCancellable: AnyCancellable?
+    private var hasLoadedInitialState = false
 
     init(storage: StorageClient = StorageClient()) {
         self.storage = storage
-        loadInitialState()
     }
 
     var preferredColorScheme: ColorScheme? {
@@ -75,13 +75,22 @@ final class AppStore: ObservableObject {
     }
 
     func loadInitialState() {
-        todos = storage.load([TodoItem].self, for: .todos) ?? []
-        planTasks = storage.load([PlanTask].self, for: .planTasks) ?? []
-        pomodoroSessions = storage.load([PomodoroSession].self, for: .pomodoroSessions) ?? []
-        profile = storage.load(UserProfile.self, for: .userProfile) ?? .default
-        settings = storage.load(AppSettings.self, for: .appSettings) ?? .default
-        syncGoalIfNeeded()
-        savePersistentState()
+        guard !hasLoadedInitialState else { return }
+        hasLoadedInitialState = true
+
+        Task {
+            let snapshot = await Task.detached(priority: .userInitiated) {
+                StorageClient().loadSnapshot()
+            }.value
+
+            todos = snapshot.todos
+            planTasks = snapshot.planTasks
+            pomodoroSessions = snapshot.pomodoroSessions
+            profile = snapshot.profile
+            settings = snapshot.settings
+            syncGoalIfNeeded()
+            savePersistentState()
+        }
     }
 
     func addTodo(title: String, taskDate: Date = Date()) {
@@ -119,7 +128,13 @@ final class AppStore: ObservableObject {
         savePlanTasks()
     }
 
-    func addPlanItem(title: String, to planTaskID: UUID) {
+    func addPlanItem(
+        title: String,
+        to planTaskID: UUID,
+        cycle: TodoTaskCycle = .daily,
+        dailyDurationMinutes: Int = 25,
+        focusTimerDirection: FocusTimerDirection = .countDown
+    ) {
         let trimmed = sanitize(title)
         guard !trimmed.isEmpty else { return }
         guard planTasks.contains(where: { $0.id == planTaskID }) else { return }
@@ -134,7 +149,10 @@ final class AppStore: ObservableObject {
                 isCompleted: false,
                 createdAt: now,
                 updatedAt: now,
-                taskDate: now
+                taskDate: now,
+                cycle: cycle,
+                dailyDurationMinutes: min(max(dailyDurationMinutes, 5), 480),
+                focusTimerDirection: focusTimerDirection
             )
         )
         saveTodos()
