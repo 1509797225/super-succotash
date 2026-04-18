@@ -160,6 +160,7 @@ struct JellyToolMenuAction: Identifiable {
 
 struct JellyToolMenu: View {
     @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
     @Binding var isExpanded: Bool
 
     let actions: [JellyToolMenuAction]
@@ -214,7 +215,7 @@ struct JellyToolMenu: View {
                     .modifier(JellyCardModifier(shadowStyle: .standard))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "Close settings menu" : "Open settings menu")
+            .accessibilityLabel(isExpanded ? L10n.t(.closeSettingsMenu, language) : L10n.t(.openSettingsMenu, language))
         }
         .frame(width: 72, alignment: .topTrailing)
         .animation(.spring(response: 0.28, dampingFraction: 0.78), value: isExpanded)

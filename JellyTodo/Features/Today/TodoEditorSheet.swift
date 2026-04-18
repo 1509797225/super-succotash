@@ -15,6 +15,7 @@ struct TodoEditorSheet: View {
     let onConfirm: (TodoEditorResult) -> Void
 
     @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
     @State private var cycle: TodoTaskCycle
@@ -68,7 +69,7 @@ struct TodoEditorSheet: View {
     var body: some View {
         BottomSheetContainer(title: title) {
             VStack(spacing: 18) {
-                TextField("Enter task title", text: $text)
+                TextField(L10n.t(.enterTaskTitle, language), text: $text)
                     .font(ThemeTokens.Typography.taskTitle)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .padding(.horizontal, 20)
@@ -83,7 +84,7 @@ struct TodoEditorSheet: View {
                 }
 
                 HStack(spacing: 16) {
-                    CapsuleButton(title: "Cancel") {
+                    CapsuleButton(title: L10n.t(.cancel, language)) {
                         dismiss()
                     }
 
@@ -100,13 +101,13 @@ struct TodoEditorSheet: View {
 
     private var cyclePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Task Cycle")
+            Text(L10n.t(.taskCycle, language))
                 .font(ThemeTokens.Typography.caption)
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(TodoTaskCycle.allCases) { item in
-                    optionButton(title: item.title, isSelected: cycle == item) {
+                    optionButton(title: item.title(language: language), isSelected: cycle == item) {
                         cycle = item
                     }
                 }
@@ -116,7 +117,7 @@ struct TodoEditorSheet: View {
 
     private var durationField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Daily Duration")
+            Text(L10n.t(.dailyDuration, language))
                 .font(ThemeTokens.Typography.caption)
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
@@ -133,7 +134,7 @@ struct TodoEditorSheet: View {
                         durationText = String(newValue.filter(\.isNumber).prefix(3))
                     }
 
-                Text("min / day")
+                Text(L10n.t(.minDay, language))
                     .font(ThemeTokens.Typography.body)
                     .foregroundStyle(ThemeTokens.Colors.textSecondary)
             }
@@ -142,13 +143,13 @@ struct TodoEditorSheet: View {
 
     private var directionPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Timer Direction")
+            Text(L10n.t(.timerDirection, language))
                 .font(ThemeTokens.Typography.caption)
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
             HStack(spacing: 10) {
                 ForEach(FocusTimerDirection.allCases) { item in
-                    optionButton(title: item.title, isSelected: focusTimerDirection == item) {
+                    optionButton(title: item.title(language: language), isSelected: focusTimerDirection == item) {
                         focusTimerDirection = item
                     }
                 }

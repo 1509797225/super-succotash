@@ -8,6 +8,7 @@ private enum AppTab: Hashable {
 
 struct RootTabView: View {
     @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
     @State private var selectedTab: AppTab = .today
 
     var body: some View {
@@ -16,7 +17,7 @@ struct RootTabView: View {
                 PlanView()
             }
             .tabItem {
-                Label("Plan", systemImage: "list.bullet.rectangle.portrait")
+                Label(L10n.t(.plan, language), systemImage: "list.bullet.rectangle.portrait")
             }
             .tag(AppTab.plan)
 
@@ -24,7 +25,7 @@ struct RootTabView: View {
                 TodayView()
             }
             .tabItem {
-                Label("Today", systemImage: "sun.max")
+                Label(L10n.t(.today, language), systemImage: "sun.max")
             }
             .tag(AppTab.today)
 
@@ -32,7 +33,7 @@ struct RootTabView: View {
                 SetView()
             }
             .tabItem {
-                Label("Set", systemImage: "slider.horizontal.3")
+                Label(L10n.t(.set, language), systemImage: "slider.horizontal.3")
             }
             .tag(AppTab.set)
         }

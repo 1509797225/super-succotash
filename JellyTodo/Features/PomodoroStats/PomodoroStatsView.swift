@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PomodoroStatsView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.appLanguage) private var language
     let initialRelatedTodoID: UUID?
 
     @State private var range: PomodoroStatsRange = .today
@@ -25,27 +26,27 @@ struct PomodoroStatsView: View {
                         DonutChartView(
                             segments: segments,
                             centerTitle: stats.completedPomodoros == 0 ? "0%" : "\(Int(stats.goalRate * 100))%",
-                            centerSubtitle: stats.completedPomodoros == 0 ? "No pomodoro data" : "Goal Rate"
+                            centerSubtitle: stats.completedPomodoros == 0 ? L10n.t(.noPomodoroData, language) : L10n.t(.goalRate, language)
                         )
 
                         VStack(spacing: 12) {
-                            legendRow(title: "Focus", opacity: 1.0)
-                            legendRow(title: "Short Break", opacity: 0.72)
-                            legendRow(title: "Long Break", opacity: 0.44)
+                            legendRow(title: PomodoroTimerMode.focus.title(language: language), opacity: 1.0)
+                            legendRow(title: PomodoroTimerMode.shortBreak.title(language: language), opacity: 0.72)
+                            legendRow(title: PomodoroTimerMode.longBreak.title(language: language), opacity: 0.44)
                         }
                     }
                     .padding(24)
                     .frame(maxWidth: .infinity)
                 }
 
-                SectionCard(title: "Stats") {
-                    StatRow(title: "Focus Time", value: stats.focusSeconds.formattedMinutesText())
+                SectionCard(title: L10n.t(.stats, language)) {
+                    StatRow(title: L10n.t(.focusTime, language), value: stats.focusSeconds.formattedMinutesText())
                     Divider().overlay(ThemeTokens.Colors.subtleLine)
-                    StatRow(title: "Break Time", value: stats.breakSeconds.formattedMinutesText())
+                    StatRow(title: L10n.t(.breakTime, language), value: stats.breakSeconds.formattedMinutesText())
                     Divider().overlay(ThemeTokens.Colors.subtleLine)
-                    StatRow(title: "Completed", value: "\(stats.completedPomodoros)")
+                    StatRow(title: L10n.t(.completed, language), value: "\(stats.completedPomodoros)")
                     Divider().overlay(ThemeTokens.Colors.subtleLine)
-                    StatRow(title: "Goal Rate", value: "\(Int(stats.goalRate * 100))%")
+                    StatRow(title: L10n.t(.goalRate, language), value: "\(Int(stats.goalRate * 100))%")
                 }
             }
             .padding(.horizontal, ThemeTokens.Metrics.horizontalPadding)
@@ -53,7 +54,7 @@ struct PomodoroStatsView: View {
             .padding(.bottom, 32)
         }
         .background(ThemeTokens.background(for: store.settings.themeMode).ignoresSafeArea())
-        .navigationTitle("Pomodoro Stats")
+        .navigationTitle(L10n.t(.pomodoroStats, language))
         .navigationBarTitleDisplayMode(.large)
         .onAppear {
             selectedMode = store.timerState.mode
@@ -68,12 +69,12 @@ struct PomodoroStatsView: View {
     private var timerCard: some View {
         JellyCard {
             VStack(alignment: .leading, spacing: 20) {
-                Text("Timer")
+                Text(L10n.t(.timer, language))
                     .font(ThemeTokens.Typography.sectionTitle)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
                 if let relatedTitle {
-                    Text("Linked task: \(relatedTitle)")
+                    Text("\(L10n.t(.linkedTask, language)): \(relatedTitle)")
                         .font(ThemeTokens.Typography.caption)
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                         .lineLimit(1)
@@ -82,7 +83,7 @@ struct PomodoroStatsView: View {
                 modeSelector
 
                 VStack(spacing: 10) {
-                    Text(displayMode.title)
+                    Text(displayMode.title(language: language))
                         .font(ThemeTokens.Typography.body)
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
@@ -98,27 +99,27 @@ struct PomodoroStatsView: View {
 
                 HStack(spacing: 12) {
                     if store.timerState.isRunning {
-                        CapsuleButton(title: "Pause") {
+                        CapsuleButton(title: L10n.t(.pause, language)) {
                             store.pausePomodoro()
                         }
 
-                        CapsuleButton(title: "Discard") {
+                        CapsuleButton(title: L10n.t(.discard, language)) {
                             store.stopPomodoro(discard: true)
                         }
                     } else if store.timerState.isPaused {
-                        CapsuleButton(title: "Resume") {
+                        CapsuleButton(title: L10n.t(.resume, language)) {
                             store.resumePomodoro()
                         }
 
-                        CapsuleButton(title: "Discard") {
+                        CapsuleButton(title: L10n.t(.discard, language)) {
                             store.stopPomodoro(discard: true)
                         }
                     } else {
-                        CapsuleButton(title: "Start") {
+                        CapsuleButton(title: L10n.t(.start, language)) {
                             store.startPomodoro(mode: selectedMode, relatedTodoID: initialRelatedTodoID)
                         }
 
-                        CapsuleButton(title: "Reset") {
+                        CapsuleButton(title: L10n.t(.reset, language)) {
                             selectedMode = .focus
                         }
                     }
@@ -134,7 +135,7 @@ struct PomodoroStatsView: View {
                 Button {
                     range = item
                 } label: {
-                    Text(item.title)
+                    Text(item.title(language: language))
                         .font(ThemeTokens.Typography.body)
                         .foregroundStyle(range == item ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
                         .padding(.horizontal, 18)
@@ -153,7 +154,7 @@ struct PomodoroStatsView: View {
                 Button {
                     selectedMode = mode
                 } label: {
-                    Text(mode.title)
+                    Text(mode.title(language: language))
                         .font(ThemeTokens.Typography.caption)
                         .foregroundStyle(selectedMode == mode ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
                         .padding(.horizontal, 14)
@@ -170,12 +171,17 @@ struct PomodoroStatsView: View {
 
     private var timerStatusText: String {
         if store.timerState.isRunning {
-            return "Running"
+            return L10n.t(.running, language)
         }
         if store.timerState.isPaused {
-            return "Paused"
+            return L10n.t(.paused, language)
         }
-        return "Ready for \(displayMode.title)"
+        switch language {
+        case .english:
+            return "Ready for \(displayMode.title(language: language))"
+        case .chinese:
+            return "准备\(displayMode.title(language: language))"
+        }
     }
 
     private var displayMode: PomodoroTimerMode {

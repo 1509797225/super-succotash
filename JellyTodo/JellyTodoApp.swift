@@ -53,6 +53,8 @@ struct JellyTodoApp: App {
             RootTabView()
                 .environmentObject(store)
                 .environment(\.appThemeMode, store.settings.themeMode)
+                .environment(\.appLanguage, store.settings.language)
+                .environment(\.locale, Locale(identifier: store.settings.language.localeIdentifier))
                 .preferredColorScheme(store.preferredColorScheme)
                 .background(ThemeTokens.background(for: store.settings.themeMode).ignoresSafeArea())
                 .task {

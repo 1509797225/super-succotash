@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PlanView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.appLanguage) private var language
     @State private var showingNewTask = false
     @State private var addingItemTaskID: UUID?
     @State private var editingTodo: TodoItem?
@@ -15,7 +16,7 @@ struct PlanView: View {
 
             List {
                 if store.planSections.isEmpty {
-                    Text("No plans yet")
+                    Text(L10n.t(.noPlansYet, language))
                         .font(ThemeTokens.Typography.sectionTitle)
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)
@@ -50,7 +51,7 @@ struct PlanView: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "plus")
-                                    Text("Add Item")
+                                    Text(L10n.t(.addItem, language))
                                 }
                                 .font(.system(size: 18, weight: .bold, design: .rounded))
                                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
@@ -77,13 +78,13 @@ struct PlanView: View {
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 0)
 
-            CapsuleButton(title: "New Plan", minWidth: 120) {
+            CapsuleButton(title: L10n.t(.newPlan, language), minWidth: 120) {
                 showingNewTask = true
             }
             .padding(.trailing, ThemeTokens.Metrics.horizontalPadding)
             .padding(.bottom, 18)
         }
-        .navigationTitle("Plan")
+        .navigationTitle(L10n.t(.plan, language))
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(
             isPresented: Binding(
@@ -100,7 +101,7 @@ struct PlanView: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            TodoEditorSheet(title: "New Plan", confirmTitle: "Confirm") { title in
+            TodoEditorSheet(title: L10n.t(.newPlan, language), confirmTitle: L10n.t(.confirm, language)) { title in
                 store.addPlanTask(title: title)
             }
         }
@@ -114,7 +115,7 @@ struct PlanView: View {
                 }
             )
         ) {
-            TodoEditorSheet(title: "New Item", confirmTitle: "Add", showsFocusSettings: true) { result in
+            TodoEditorSheet(title: L10n.t(.newItem, language), confirmTitle: L10n.t(.add, language), showsFocusSettings: true) { result in
                 if let addingItemTaskID {
                     store.addPlanItem(
                         title: result.title,
@@ -134,7 +135,7 @@ struct PlanView: View {
             }
         }
         .sheet(item: $editingTodo) { todo in
-            TodoEditorSheet(title: "Edit Task", todo: todo, confirmTitle: "Save") { result in
+            TodoEditorSheet(title: L10n.t(.editTask, language), todo: todo, confirmTitle: L10n.t(.save, language)) { result in
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
@@ -159,7 +160,7 @@ struct PlanView: View {
                             .foregroundStyle(ThemeTokens.Colors.textPrimary)
                             .lineLimit(1)
 
-                        Text("\(section.items.count) items")
+                        Text(itemsCountText(section.items.count))
                             .font(.system(size: 15, weight: .bold, design: .rounded))
                             .foregroundStyle(ThemeTokens.Colors.textSecondary)
                     }
@@ -188,5 +189,14 @@ struct PlanView: View {
             bottom: bottom,
             trailing: ThemeTokens.Metrics.horizontalPadding
         )
+    }
+
+    private func itemsCountText(_ count: Int) -> String {
+        switch language {
+        case .english:
+            return count == 1 ? "1 item" : "\(count) items"
+        case .chinese:
+            return "\(count) 个事项"
+        }
     }
 }

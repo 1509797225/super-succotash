@@ -5,6 +5,7 @@ private struct ProfileEditorSheet: View {
     let onSave: (UserProfile) -> Void
 
     @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
     @Environment(\.dismiss) private var dismiss
     @State private var nickname: String
     @State private var signature: String
@@ -19,7 +20,7 @@ private struct ProfileEditorSheet: View {
     }
 
     var body: some View {
-        BottomSheetContainer(title: "Edit Profile") {
+        BottomSheetContainer(title: L10n.t(.editProfile, language)) {
             VStack(spacing: 16) {
                 TextField("Nickname", text: $nickname)
                     .font(ThemeTokens.Typography.body)
@@ -36,7 +37,7 @@ private struct ProfileEditorSheet: View {
                     .clipShape(Capsule())
 
                 HStack {
-                    Text("Daily Goal")
+                    Text(L10n.t(.dailyGoal, language))
                         .font(ThemeTokens.Typography.body)
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                     Spacer()
@@ -69,11 +70,11 @@ private struct ProfileEditorSheet: View {
                 .clipShape(Capsule())
 
                 HStack(spacing: 16) {
-                    CapsuleButton(title: "Cancel") {
+                    CapsuleButton(title: L10n.t(.cancel, language)) {
                         dismiss()
                     }
 
-                    CapsuleButton(title: "Save") {
+                    CapsuleButton(title: L10n.t(.save, language)) {
                         onSave(
                             UserProfile(
                                 nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -93,26 +94,28 @@ private struct ProfileEditorSheet: View {
 
 struct SetView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.appLanguage) private var language
     @State private var showingProfileEditor = false
     @State private var showingThemePicker = false
+    @State private var showingLanguagePicker = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 26) {
-                Text("设置")
+                Text(L10n.t(.settings, language))
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .padding(.top, 26)
 
                 plusCard
 
-                settingsLabel("个人主页")
+                settingsLabel(L10n.t(.profile, language))
                 profileRow
 
-                settingsLabel("基础设置")
+                settingsLabel(L10n.t(.preferences, language))
                 baseSettingsGroup
 
-                settingsLabel("关于")
+                settingsLabel(L10n.t(.about, language))
                 aboutGroup
             }
             .padding(.horizontal, ThemeTokens.Metrics.horizontalPadding)
@@ -126,11 +129,20 @@ struct SetView: View {
                 store.updateProfile(profile)
             }
         }
-        .confirmationDialog("Theme", isPresented: $showingThemePicker, titleVisibility: .visible) {
+        .confirmationDialog(L10n.t(.theme, language), isPresented: $showingThemePicker, titleVisibility: .visible) {
             ForEach(AppThemeMode.allCases) { mode in
-                Button(mode.title) {
+                Button(mode.title(language: language)) {
                     var updated = store.settings
                     updated.themeMode = mode
+                    store.updateSettings(updated)
+                }
+            }
+        }
+        .confirmationDialog(L10n.t(.language, language), isPresented: $showingLanguagePicker, titleVisibility: .visible) {
+            ForEach(AppLanguage.allCases) { item in
+                Button(item.title) {
+                    var updated = store.settings
+                    updated.language = item
                     store.updateSettings(updated)
                 }
             }
@@ -167,7 +179,7 @@ struct SetView: View {
                         .font(.system(size: 18, weight: .black, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
-                    Text("解锁专注计划和统计玩法")
+                    Text(L10n.t(.plusDescription, language))
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                 }
@@ -199,7 +211,7 @@ struct SetView: View {
                 settingIcon(systemName: "person.crop.circle.fill")
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(store.profile.nickname.isEmpty ? "像素用户" : store.profile.nickname)
+                    Text(store.profile.nickname.isEmpty ? "Jelly User" : store.profile.nickname)
                         .font(.system(size: 22, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
                         .lineLimit(1)
@@ -230,7 +242,7 @@ struct SetView: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 settingIcon(systemName: "circle.lefthalf.filled")
-                Text("外观")
+                Text(L10n.t(.appearance, language))
                     .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
@@ -269,8 +281,8 @@ struct SetView: View {
             } label: {
                 settingLine(
                     icon: "target",
-                    title: "主题",
-                    value: store.settings.themeMode.title,
+                    title: L10n.t(.theme, language),
+                    value: store.settings.themeMode.title(language: language),
                     showsChevron: true
                 )
             }
@@ -278,14 +290,14 @@ struct SetView: View {
 
             settingDivider
 
-            settingLine(icon: "app.badge.fill", title: "应用图标", badge: "PLUS", showsChevron: true)
+            settingLine(icon: "app.badge.fill", title: L10n.t(.appIcon, language), badge: "PLUS", showsChevron: true)
 
             settingDivider
 
             HStack(spacing: 14) {
                 settingIcon(systemName: "waveform.path")
 
-                Text("触觉反馈")
+                Text(L10n.t(.haptics, language))
                     .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
@@ -306,14 +318,19 @@ struct SetView: View {
 
             settingDivider
 
-            settingLine(icon: "globe", title: "语言", value: "简体中文（中国）", showsChevron: true)
+            Button {
+                showingLanguagePicker = true
+            } label: {
+                settingLine(icon: "globe", title: L10n.t(.language, language), value: store.settings.language.title, showsChevron: true)
+            }
+            .buttonStyle(.plain)
 
             settingDivider
 
             HStack(spacing: 14) {
                 settingIcon(systemName: "timer")
 
-                Text("番茄目标")
+                Text(L10n.t(.pomodoroGoal, language))
                     .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
@@ -351,7 +368,7 @@ struct SetView: View {
             HStack(spacing: 14) {
                 settingIcon(systemName: "textformat.size")
 
-                Text("大字体")
+                Text(L10n.t(.largeText, language))
                     .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
@@ -376,9 +393,9 @@ struct SetView: View {
 
     private var aboutGroup: some View {
         VStack(spacing: 0) {
-            settingLine(icon: "sparkles", title: "设计理念", value: "Big Jelly")
+            settingLine(icon: "sparkles", title: L10n.t(.designConcept, language), value: L10n.t(.bigJelly, language))
             settingDivider
-            settingLine(icon: "number", title: "版本", value: "1.0")
+            settingLine(icon: "number", title: L10n.t(.version, language), value: "1.0")
         }
         .background(groupBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))

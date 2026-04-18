@@ -267,8 +267,16 @@ struct AppSettings: Codable, Equatable {
     var hapticsEnabled: Bool
     var pomodoroGoalPerDay: Int
     var useLargeText: Bool
+    var language: AppLanguage
 }
 ```
+
+语言设置：
+
+- `AppLanguage` 固定支持 `English` 与 `简体中文`
+- 语言切换为应用内设置，切换后一级 Tab、设置页、任务弹窗、番茄钟与主要操作按钮即时刷新
+- UI 文案必须优先使用统一本地化入口，避免页面内散落硬编码中英文
+- 中英文切换不得破坏大字体、大 Item 与胶囊按钮布局，较长英文需使用单行截断或缩放保护
 
 ## 7. 本地存储方案
 
@@ -306,7 +314,7 @@ final class AppStore: ObservableObject {
     @Published var todos: [TodoItem] = []
     @Published var pomodoroSessions: [PomodoroSession] = []
     @Published var profile: UserProfile = .init(nickname: "", signature: "", dailyGoal: 4)
-    @Published var settings: AppSettings = .init(themeMode: .blackWhite, hapticsEnabled: true, pomodoroGoalPerDay: 4, useLargeText: true)
+    @Published var settings: AppSettings = .init(themeMode: .blackWhite, hapticsEnabled: true, pomodoroGoalPerDay: 4, useLargeText: true, language: .english)
 }
 ```
 
@@ -477,7 +485,7 @@ MVP 行为：
 - `主题`：展示当前主题，点击可选择 Pink / Black White / Blue / Green / Rainbow
 - `应用图标`：预留 PLUS 标识
 - `触觉反馈`：开关
-- `语言`：展示 `简体中文（中国）`
+- `语言`：支持 `English / 简体中文` 切换，切换后应用内主要 UI 文案即时更新
 - `番茄目标`：支持加减
 - `大字体`：开关
 
@@ -727,7 +735,7 @@ UI 说明：
 │ ◎ 主题          Black White   >    │
 │ ◉ 应用图标       PLUS         >    │
 │ ≋ 触觉反馈                    On   │
-│ ◎ 语言          简体中文      >    │
+│ ◎ 语言          English      >    │
 │ ◷ 番茄目标       - 4 +             │
 │                                    │
 │ About                              │

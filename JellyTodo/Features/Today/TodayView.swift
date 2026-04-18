@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TodayView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.appLanguage) private var language
     @State private var showingNewTask = false
     @State private var editingTodo: TodoItem?
     @State private var selectedTodo: TodoItem?
@@ -20,13 +21,13 @@ struct TodayView: View {
             .scrollContentBackground(.hidden)
             .environment(\.defaultMinListRowHeight, 0)
 
-            CapsuleButton(title: "New Task", minWidth: 120) {
+            CapsuleButton(title: L10n.t(.newTask, language), minWidth: 120) {
                 showingNewTask = true
             }
             .padding(.trailing, ThemeTokens.Metrics.horizontalPadding)
             .padding(.bottom, 18)
         }
-        .navigationTitle("Today")
+        .navigationTitle(L10n.t(.today, language))
         .navigationBarTitleDisplayMode(.large)
         .navigationDestination(
             isPresented: Binding(
@@ -54,7 +55,7 @@ struct TodayView: View {
             }
         }
         .sheet(isPresented: $showingNewTask) {
-            TodoEditorSheet(title: "New Task", confirmTitle: "Confirm") { text in
+            TodoEditorSheet(title: L10n.t(.newTask, language), confirmTitle: L10n.t(.confirm, language)) { text in
                 store.addTodo(title: text, taskDate: Date())
             }
         }
@@ -66,7 +67,7 @@ struct TodayView: View {
             }
         }
         .sheet(item: $editingTodo) { todo in
-            TodoEditorSheet(title: "Edit Task", todo: todo, confirmTitle: "Save") { result in
+            TodoEditorSheet(title: L10n.t(.editTask, language), todo: todo, confirmTitle: L10n.t(.save, language)) { result in
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
@@ -82,7 +83,7 @@ struct TodayView: View {
     @ViewBuilder
     private var todayRows: some View {
         if store.todayTodos.isEmpty {
-            Text("Today is clear")
+            Text(L10n.t(.todayIsClear, language))
                 .font(ThemeTokens.Typography.sectionTitle)
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)

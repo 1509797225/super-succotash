@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskFocusPieIcon: View {
     let summaries: [TaskFocusSummary]
     let themeMode: AppThemeMode
+    @Environment(\.appLanguage) private var language
 
     private var totalSeconds: Int {
         summaries.reduce(0) { $0 + $1.seconds }
@@ -42,7 +43,7 @@ struct TaskFocusPieIcon: View {
             .shadow(color: .black.opacity(0.14), radius: 4, x: 1, y: 3)
         }
         .frame(width: 42, height: 36)
-        .accessibilityLabel(totalSeconds > 0 ? "Today focus chart" : "No focus data today")
+        .accessibilityLabel(totalSeconds > 0 ? L10n.t(.todayFocusChart, language) : L10n.t(.noFocusDataToday, language))
     }
 
     private var pieSlices: [(startAngle: Angle, endAngle: Angle)] {

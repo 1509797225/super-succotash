@@ -15,6 +15,7 @@ GitHub 仓库：`1509797225/super-succotash`
 - `Immersive Mode`：横屏下可进入沉浸式，只保留倒计时和退出按钮。
 - `Pomodoro Stats`：通过 Today 右上角饼图入口查看番茄钟统计。
 - `Themes`：支持灰度基调以及粉色、蓝色、绿色等主题基调。
+- `Language`：支持应用内 English / 简体中文切换，设置后本地持久化。
 
 ## 技术栈
 

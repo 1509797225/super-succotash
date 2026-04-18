@@ -10,6 +10,8 @@ struct TodoRow: View {
     var onDelete: (() -> Void)? = nil
     var onSwipeComplete: (() -> Void)? = nil
 
+    @Environment(\.appLanguage) private var language
+
     @State private var settledFillWidth: CGFloat = 0
     @State private var actionReveal: CGFloat = 0
     @State private var dragStartFillWidth: CGFloat = 0
@@ -98,13 +100,13 @@ struct TodoRow: View {
     private var actionButtons: some View {
         HStack(spacing: 8) {
             if let onEdit {
-                swipeButton(title: "Edit") {
+                swipeButton(title: L10n.t(.edit, language)) {
                     onEdit()
                 }
             }
 
             if let onDelete {
-                swipeButton(title: "Delete") {
+                swipeButton(title: L10n.t(.delete, language)) {
                     onDelete()
                 }
             }
@@ -225,6 +227,8 @@ struct CompactTodoRow: View {
     var onTap: (() -> Void)? = nil
     var onAddToday: (() -> Void)? = nil
 
+    @Environment(\.appLanguage) private var language
+
     @State private var actionReveal: CGFloat = 0
     @State private var dragStartActionReveal: CGFloat = 0
 
@@ -239,7 +243,7 @@ struct CompactTodoRow: View {
             ZStack(alignment: .trailing) {
                 if let onAddToday {
                     Button(action: onAddToday) {
-                        Text("Today")
+                        Text(L10n.t(.todaySwipeAction, language))
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundStyle(ThemeTokens.Colors.textPrimary)
                             .frame(width: 82, height: 54)
@@ -281,14 +285,14 @@ struct CompactTodoRow: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text(item.cycle.title)
+                    Text(item.cycle.title(language: language))
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                         .lineLimit(1)
 
                     HStack(spacing: 6) {
                         compactInfoPill("\(item.dailyDurationMinutes)m")
-                        compactInfoPill(item.focusTimerDirection.shortTitle)
+                        compactInfoPill(item.focusTimerDirection.shortTitle(language: language))
                     }
                 }
             }

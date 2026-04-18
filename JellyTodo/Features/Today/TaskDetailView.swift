@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskActionSheet: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.appLanguage) private var language
     @Environment(\.dismiss) private var dismiss
 
     let todo: TodoItem
@@ -23,7 +24,7 @@ struct TaskActionSheet: View {
         .presentationDetents([.height(430)])
         .presentationDragIndicator(.hidden)
         .sheet(isPresented: $showingEditor) {
-            TodoEditorSheet(title: "Edit Task", todo: latestTodo, confirmTitle: "Save") { result in
+            TodoEditorSheet(title: L10n.t(.editTask, language), todo: latestTodo, confirmTitle: L10n.t(.save, language)) { result in
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
@@ -53,9 +54,9 @@ struct TaskActionSheet: View {
                     .strikethrough(todo.isCompleted, color: ThemeTokens.Colors.textPrimary)
 
                 HStack(spacing: 8) {
-                    taskMetaPill(title: todo.cycle.title)
-                    taskMetaPill(title: "\(todo.dailyDurationMinutes) min")
-                    taskMetaPill(title: todo.focusTimerDirection.shortTitle)
+                    taskMetaPill(title: todo.cycle.title(language: language))
+                    taskMetaPill(title: durationMinutesText(todo.dailyDurationMinutes))
+                    taskMetaPill(title: todo.focusTimerDirection.shortTitle(language: language))
                 }
 
                 focusButton
@@ -80,7 +81,7 @@ struct TaskActionSheet: View {
                         .font(.system(size: 15, weight: .bold))
                 }
 
-                Text("Start Focus")
+                Text(L10n.t(.startFocus, language))
                     .font(ThemeTokens.Typography.body)
             }
             .foregroundStyle(ThemeTokens.Colors.backgroundPrimary)
@@ -94,11 +95,11 @@ struct TaskActionSheet: View {
 
     private var editDeleteColumn: some View {
         VStack(spacing: 12) {
-            iconActionPill(title: "Edit", systemImage: "pencil") {
+            iconActionPill(title: L10n.t(.edit, language), systemImage: "pencil") {
                 showingEditor = true
             }
 
-            iconActionPill(title: "Delete", systemImage: "trash") {
+            iconActionPill(title: L10n.t(.delete, language), systemImage: "trash") {
                 store.deleteTodo(id: todo.id)
                 dismiss()
             }
@@ -112,18 +113,18 @@ struct TaskActionSheet: View {
         } label: {
             JellyCard {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Focused")
+                    Text(L10n.t(.focused, language))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
-                    Text(durationUnit.format(seconds: store.focusedSeconds(for: todo.id)))
+                    Text(durationUnit.format(seconds: store.focusedSeconds(for: todo.id), language: language))
                         .font(.system(size: 38, weight: .bold, design: .rounded))
                         .monospacedDigit()
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.72)
 
-                    Text("tap unit")
+                    Text(L10n.t(.tapUnit, language))
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary.opacity(0.75))
                 }
@@ -145,6 +146,10 @@ struct TaskActionSheet: View {
             .frame(height: 36)
             .background(ThemeTokens.Colors.backgroundPrimary.opacity(0.8))
             .clipShape(Capsule())
+    }
+
+    private func durationMinutesText(_ minutes: Int) -> String {
+        language == .english ? "\(minutes) min" : "\(minutes) 分钟"
     }
 
     private func iconActionPill(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
@@ -181,20 +186,21 @@ private enum FocusDurationUnit {
         }
     }
 
-    func format(seconds: Int) -> String {
+    func format(seconds: Int, language: AppLanguage) -> String {
         switch self {
         case .hours:
-            return String(format: "%.1f h", Double(seconds) / 3600)
+            return String(format: language == .english ? "%.1f h" : "%.1f时", Double(seconds) / 3600)
         case .minutes:
-            return "\(max(seconds / 60, 0)) min"
+            return language == .english ? "\(max(seconds / 60, 0)) min" : "\(max(seconds / 60, 0))分"
         case .seconds:
-            return "\(max(seconds, 0)) s"
+            return language == .english ? "\(max(seconds, 0)) s" : "\(max(seconds, 0))秒"
         }
     }
 }
 
 struct FocusSessionView: View {
     @EnvironmentObject private var store: AppStore
+    @Environment(\.appLanguage) private var language
     @Environment(\.dismiss) private var dismiss
 
     let todoID: UUID
@@ -226,7 +232,7 @@ struct FocusSessionView: View {
                         portraitFocusLayout(todo)
                     }
                 } else {
-                    Text("Task deleted")
+                    Text(L10n.t(.taskDeleted, language))
                         .font(ThemeTokens.Typography.sectionTitle)
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                 }
@@ -247,7 +253,7 @@ struct FocusSessionView: View {
                 }
             }
         }
-        .navigationTitle("Focus")
+        .navigationTitle(L10n.t(.focus, language))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(isImmersiveMode ? .hidden : .visible, for: .navigationBar)
         .toolbar((isLandscapeLocked || isImmersiveMode) ? .hidden : .visible, for: .tabBar)
@@ -326,7 +332,7 @@ struct FocusSessionView: View {
                 .foregroundStyle(ThemeTokens.Colors.textPrimary)
                 .frame(maxWidth: .infinity)
 
-            Text("\(todo.focusTimerDirection.title) · \(todo.dailyDurationMinutes) min")
+            Text("\(todo.focusTimerDirection.title(language: language)) · \(durationMinutesText(todo.dailyDurationMinutes))")
                 .font(ThemeTokens.Typography.body)
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
         }
@@ -345,16 +351,16 @@ struct FocusSessionView: View {
                 .frame(width: 132)
 
             if store.timerState.isRunning {
-                compactControlButton(title: "Pause") {
+                compactControlButton(title: L10n.t(.pause, language)) {
                     store.pausePomodoro()
                 }
             } else if store.timerState.isPaused {
-                compactControlButton(title: "Resume") {
+                compactControlButton(title: L10n.t(.resume, language)) {
                     store.resumePomodoro()
                 }
             }
 
-            compactControlButton(title: "Stop") {
+            compactControlButton(title: L10n.t(.stop, language)) {
                 store.stopPomodoro(discard: true)
                 dismiss()
             }
@@ -378,16 +384,16 @@ struct FocusSessionView: View {
 
                 HStack(spacing: 14) {
                     if store.timerState.isRunning {
-                        CapsuleButton(title: "Pause") {
+                        CapsuleButton(title: L10n.t(.pause, language)) {
                             store.pausePomodoro()
                         }
                     } else if store.timerState.isPaused {
-                        CapsuleButton(title: "Resume") {
+                        CapsuleButton(title: L10n.t(.resume, language)) {
                             store.resumePomodoro()
                         }
                     }
 
-                    CapsuleButton(title: "Stop") {
+                    CapsuleButton(title: L10n.t(.stop, language)) {
                         store.stopPomodoro(discard: true)
                         dismiss()
                     }
@@ -421,7 +427,7 @@ struct FocusSessionView: View {
                         isImmersiveMode = false
                     }
                 } label: {
-                    Text("Exit")
+                    Text(L10n.t(.exit, language))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
                         .frame(width: 86, height: 48)
@@ -440,12 +446,12 @@ struct FocusSessionView: View {
 
     private var statusText: String {
         if store.timerState.isRunning {
-            return "Focusing"
+            return L10n.t(.focusing, language)
         }
         if store.timerState.isPaused {
-            return "Paused"
+            return L10n.t(.paused, language)
         }
-        return "Ready"
+        return L10n.t(.ready, language)
     }
 
     private func clockFontSize(isLandscape: Bool) -> CGFloat {
@@ -459,11 +465,15 @@ struct FocusSessionView: View {
         usesHugeClock ? 168 : 126
     }
 
+    private func durationMinutesText(_ minutes: Int) -> String {
+        language == .english ? "\(minutes) min" : "\(minutes) 分钟"
+    }
+
     private func toolMenuActions(isLandscape: Bool) -> [JellyToolMenuAction] {
         var actions = [
             JellyToolMenuAction(
                 id: "orientation",
-                title: isLandscapeLocked ? "Stand" : "Rotate",
+                title: isLandscapeLocked ? L10n.t(.portrait, language) : L10n.t(.rotate, language),
                 systemImage: isLandscapeLocked ? "rotate.left.fill" : "rotate.right.fill",
                 isActive: isLandscapeLocked
             ) {
@@ -471,7 +481,7 @@ struct FocusSessionView: View {
             },
             JellyToolMenuAction(
                 id: "clock-size",
-                title: usesHugeClock ? "Small" : "Huge",
+                title: usesHugeClock ? L10n.t(.small, language) : L10n.t(.huge, language),
                 systemImage: usesHugeClock ? "textformat.size.smaller" : "textformat.size.larger",
                 isActive: usesHugeClock
             ) {
@@ -483,7 +493,7 @@ struct FocusSessionView: View {
             actions.append(
                 JellyToolMenuAction(
                     id: "immersive",
-                    title: "Immersive",
+                    title: L10n.t(.immersive, language),
                     systemImage: "viewfinder",
                     isActive: isImmersiveMode
                 ) {

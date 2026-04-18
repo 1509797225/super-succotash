@@ -20,6 +20,24 @@ enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
             return "Monthly"
         }
     }
+
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .once:
+                return "一次"
+            case .daily:
+                return "每天"
+            case .weekly:
+                return "每周"
+            case .monthly:
+                return "每月"
+            }
+        }
+    }
 }
 
 enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
@@ -43,6 +61,34 @@ enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
             return "Down"
         case .countUp:
             return "Up"
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .countDown:
+                return "倒计时"
+            case .countUp:
+                return "正计时"
+            }
+        }
+    }
+
+    func shortTitle(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return shortTitle
+        case .chinese:
+            switch self {
+            case .countDown:
+                return "倒"
+            case .countUp:
+                return "正"
+            }
         }
     }
 }
@@ -153,6 +199,22 @@ enum PomodoroTimerMode: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .focus:
+                return "专注"
+            case .shortBreak:
+                return "短休息"
+            case .longBreak:
+                return "长休息"
+            }
+        }
+    }
+
     var defaultDuration: Int {
         switch self {
         case .focus:
@@ -217,6 +279,26 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .pink:
+                return "粉色"
+            case .blackWhite:
+                return "黑白"
+            case .blue:
+                return "蓝色"
+            case .green:
+                return "绿色"
+            case .rainbow:
+                return "彩虹"
+            }
+        }
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let rawValue = try container.decode(String.self)
@@ -243,18 +325,69 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum AppLanguage: String, Codable, CaseIterable, Identifiable {
+    case english = "en"
+    case chinese = "zh-Hans"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .english:
+            return "English"
+        case .chinese:
+            return "简体中文"
+        }
+    }
+
+    var localeIdentifier: String { rawValue }
+}
+
 struct AppSettings: Codable, Equatable {
     var themeMode: AppThemeMode
     var hapticsEnabled: Bool
     var pomodoroGoalPerDay: Int
     var useLargeText: Bool
+    var language: AppLanguage
 
     static let `default` = AppSettings(
         themeMode: .blackWhite,
         hapticsEnabled: true,
         pomodoroGoalPerDay: 4,
-        useLargeText: true
+        useLargeText: true,
+        language: .english
     )
+
+    private enum CodingKeys: String, CodingKey {
+        case themeMode
+        case hapticsEnabled
+        case pomodoroGoalPerDay
+        case useLargeText
+        case language
+    }
+
+    init(
+        themeMode: AppThemeMode,
+        hapticsEnabled: Bool,
+        pomodoroGoalPerDay: Int,
+        useLargeText: Bool,
+        language: AppLanguage
+    ) {
+        self.themeMode = themeMode
+        self.hapticsEnabled = hapticsEnabled
+        self.pomodoroGoalPerDay = pomodoroGoalPerDay
+        self.useLargeText = useLargeText
+        self.language = language
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        themeMode = try container.decodeIfPresent(AppThemeMode.self, forKey: .themeMode) ?? .blackWhite
+        hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
+        pomodoroGoalPerDay = try container.decodeIfPresent(Int.self, forKey: .pomodoroGoalPerDay) ?? 4
+        useLargeText = try container.decodeIfPresent(Bool.self, forKey: .useLargeText) ?? true
+        language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .english
+    }
 }
 
 enum PomodoroStatsRange: String, CaseIterable, Identifiable {
@@ -266,6 +399,22 @@ enum PomodoroStatsRange: String, CaseIterable, Identifiable {
 
     var title: String {
         rawValue.capitalized
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .today:
+                return "今日"
+            case .week:
+                return "本周"
+            case .month:
+                return "本月"
+            }
+        }
     }
 }
 
