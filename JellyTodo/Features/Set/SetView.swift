@@ -141,6 +141,22 @@ struct SetView: View {
         store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.backgroundSoft : ThemeTokens.background(for: store.settings.themeMode)
     }
 
+    private var groupBackground: Color {
+        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.card(for: store.settings.themeMode)
+    }
+
+    private var controlBackground: Color {
+        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.card : ThemeTokens.accentSoft(for: store.settings.themeMode)
+    }
+
+    private var iconBackground: Color {
+        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.subtleLine : ThemeTokens.accentSoft(for: store.settings.themeMode)
+    }
+
+    private var currentAccent: Color {
+        ThemeTokens.accent(for: store.settings.themeMode)
+    }
+
     private var plusCard: some View {
         Button {
             showingProfileEditor = true
@@ -159,17 +175,17 @@ struct SetView: View {
                 Spacer()
 
                 Circle()
-                    .fill(ThemeTokens.Colors.subtleLine)
+                    .fill(iconBackground)
                     .frame(width: 48, height: 48)
                     .overlay(
                         Image(systemName: "chevron.right")
                             .font(.system(size: 16, weight: .black))
-                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                            .foregroundStyle(currentAccent)
                     )
             }
             .padding(.horizontal, 20)
             .frame(height: 86)
-            .background(ThemeTokens.Colors.backgroundPrimary)
+            .background(groupBackground)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -204,7 +220,7 @@ struct SetView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 66)
-            .background(ThemeTokens.Colors.backgroundPrimary)
+            .background(groupBackground)
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
@@ -232,7 +248,7 @@ struct SetView: View {
                                 .frame(width: 24, height: 24)
                                 .overlay(
                                     Circle()
-                                        .stroke(store.settings.themeMode == mode ? ThemeTokens.Colors.textPrimary : Color.clear, lineWidth: 2)
+                                        .stroke(store.settings.themeMode == mode ? currentAccent : Color.clear, lineWidth: 2)
                                 )
                                 .frame(width: 36, height: 28)
                         }
@@ -241,7 +257,7 @@ struct SetView: View {
                 }
                 .padding(.horizontal, 8)
                 .frame(height: 34)
-                .background(ThemeTokens.Colors.card)
+                .background(controlBackground)
                 .clipShape(Capsule())
             }
             .settingRowFrame()
@@ -284,7 +300,7 @@ struct SetView: View {
                     }
                 ))
                 .labelsHidden()
-                .tint(ThemeTokens.Colors.textPrimary)
+                .tint(currentAccent)
             }
             .settingRowFrame()
 
@@ -326,7 +342,7 @@ struct SetView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                .foregroundStyle(currentAccent)
             }
             .settingRowFrame()
 
@@ -350,11 +366,11 @@ struct SetView: View {
                     }
                 ))
                 .labelsHidden()
-                .tint(ThemeTokens.Colors.textPrimary)
+                .tint(currentAccent)
             }
             .settingRowFrame()
         }
-        .background(ThemeTokens.Colors.backgroundPrimary)
+        .background(groupBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
@@ -364,7 +380,7 @@ struct SetView: View {
             settingDivider
             settingLine(icon: "number", title: "版本", value: "1.0")
         }
-        .background(ThemeTokens.Colors.backgroundPrimary)
+        .background(groupBackground)
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
@@ -374,7 +390,7 @@ struct SetView: View {
 
     private var settingDivider: some View {
         Rectangle()
-            .fill(ThemeTokens.Colors.subtleLine.opacity(0.75))
+            .fill(iconBackground.opacity(0.75))
             .frame(height: 1)
             .padding(.leading, 62)
     }
@@ -407,7 +423,7 @@ struct SetView: View {
                     .foregroundStyle(ThemeTokens.Colors.backgroundPrimary)
                     .padding(.horizontal, 8)
                     .frame(height: 18)
-                    .background(ThemeTokens.Colors.textPrimary)
+                    .background(currentAccent)
                     .clipShape(Capsule())
             }
 
@@ -431,12 +447,12 @@ struct SetView: View {
 
     private func settingIcon(systemName: String) -> some View {
         Circle()
-            .fill(ThemeTokens.Colors.subtleLine)
+            .fill(iconBackground)
             .frame(width: 36, height: 36)
             .overlay(
                 Image(systemName: systemName)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .foregroundStyle(currentAccent)
             )
     }
 
