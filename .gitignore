@@ -16,3 +16,6 @@ build/
 # Local scratch files
 .tmp_icon_preview/
 
+# Local cloud secrets
+.env
+cloud/.env

@@ -13,7 +13,7 @@ GitHub 仓库：`1509797225/super-succotash`
 - `Focus`：任务级番茄钟专注页，支持正向/倒向计时、暂停、继续、停止。
 - `Landscape Focus`：Focus 页支持手动横竖屏切换，横屏隐藏底部 TabBar。
 - `Immersive Mode`：横屏下可进入沉浸式，只保留倒计时和退出按钮。
-- `Pomodoro Stats`：通过 Today 右上角饼图入口查看 3D 饼图、竖状占比图和按 Plan 聚合的番茄统计。
+- `Pomodoro Stats`：通过 Today 右上角饼图入口查看 3D 饼图、时间序列柱状图和番茄统计。
 - `Themes`：支持灰度基调以及粉色、蓝色、绿色等主题基调。
 - `Language`：支持应用内 English / 简体中文切换，设置后本地持久化。
 
@@ -68,6 +68,7 @@ xcodebuild -project JellyTodo.xcodeproj \
 `ios_todo_app_technical_plan.md` 是本项目唯一产品与技术真相源。
 
 - 改功能范围、页面结构、数据模型、主题规则、交互规则时，先更新 `ios_todo_app_technical_plan.md`，再改代码。
+- 改本地数据库、云同步、云测数据、部署环境时，同步更新 `data_management_and_cloud_sync_plan.md`。
 - 只改内部实现且不影响外部行为时，可以只改代码。
 - 每次里程碑提交前，检查核心文档与实现是否一致。
 - `README.md` 只负责项目介绍、运行方式和协作提示，不承载完整 PRD。
@@ -95,3 +96,27 @@ git config user.email "zyl1509797225@gmail.com"
 - 服务端资料系统
 
 所有任务、设置与番茄钟记录均保存在本地，卸载 App 后数据清空。
+
+## 数据与云同步规划
+
+当前版本仍使用 `UserDefaults + Codable` 本地存储。后续数据层升级路线已记录在：
+
+```text
+data_management_and_cloud_sync_plan.md
+```
+
+推荐方向为 `SQLite + GRDB` 本地数据库、`Local-first` 增量同步、云端 `PostgreSQL + Backend API + Docker Compose`，并先部署 staging 云测环境。
+
+云测代码已放在：
+
+```text
+cloud/
+```
+
+本地或服务器部署入口：
+
+```bash
+cd cloud
+cp .env.example .env
+docker compose -f docker-compose.staging.yml up -d --build
+```

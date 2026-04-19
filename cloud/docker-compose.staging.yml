@@ -1,0 +1,30 @@
+services:
+  api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: jellytodo
+      POSTGRES_USER: jellytodo
+      POSTGRES_PASSWORD: change-me
+    volumes:
+      - jellytodo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jellytodo -d jellytodo"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  jellytodo_postgres_data:

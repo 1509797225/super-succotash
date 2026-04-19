@@ -1,0 +1,21 @@
+{
+  "name": "jellytodo-cloud-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "check": "node --check src/server.js && node --check src/db.js && node --check src/seed.js",
+    "seed:basic": "node src/seed.js basic",
+    "seed:medium": "node src/seed.js medium",
+    "seed:large": "node src/seed.js large",
+    "seed:heavy": "node src/seed.js heavy",
+    "seed:reset": "node src/seed.js reset"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  }
+}

@@ -13,6 +13,7 @@
 
 - 本文档是 `JellyTodo` 的唯一产品与技术真相源
 - 后续若调整功能范围、页面结构、数据模型、主题规则、交互规则，必须先更新本文档，再修改代码
+- 涉及本地数据库、云同步、云测数据、部署环境的改动，必须同步更新 `data_management_and_cloud_sync_plan.md`
 - 仅影响内部实现细节、且不改变外部行为时，可只修改代码
 - 每次里程碑交付前，需检查本文档与当前实现是否一致
 
@@ -89,6 +90,8 @@
 - 架构：MVVM + 单向数据流
 - 路由：`NavigationStack`
 - 本地存储：`UserDefaults` + `Codable`
+- 数据升级方向：`SQLite + GRDB`
+- 云端升级方向：`PostgreSQL + Backend API + Docker Compose`
 - 状态管理：`ObservableObject` / `@Published`
 - 动画：SwiftUI 原生动画
 - 日期处理：`Calendar` + `DateFormatter`
@@ -96,7 +99,8 @@
 ### 4.2 选型原因
 
 - SwiftUI 适合快速构建大圆角、大留白、拟态卡片视觉
-- `UserDefaults` 足够承载 MVP 的本地轻量数据
+- `UserDefaults` 足够承载 MVP 的本地轻量数据，但不作为长期复杂业务数据方案
+- 后续 Plan、Today、Pomodoro Session、统计和云同步扩展应迁移到 `SQLite + GRDB`
 - `Codable` 可让 Todo、设置、番茄钟统计统一序列化
 - `NavigationStack` 足够支撑 Today 到 Pomodoro Stats 的二级跳转
 
@@ -302,6 +306,30 @@ struct AppSettings: Codable, Equatable {
 - 解析失败时回退为安全默认值
 - 单个数据块损坏不影响其他模块读取
 - 读取失败不闪退，页面回退为空状态
+
+### 7.4 数据管理升级路线
+
+当前 MVP 保持 `UserDefaults + Codable`，但后续数据复杂度已经超过长期使用 `UserDefaults` 的舒适区。
+
+下一阶段数据层目标：
+
+- 本地数据库迁移到 `SQLite + GRDB`
+- 新增 Repository 层，页面仍只通过 `AppStore` 或业务接口改状态
+- 所有业务表增加 `updated_at / deleted_at`
+- 删除操作默认软删除，为未来云同步保留删除事件
+- 新增 `change_logs`，记录本地新增、编辑、删除、完成状态变化
+- 云同步采用 `Local-first`：本地先写入，后台再同步
+
+专项方案见：
+
+- `data_management_and_cloud_sync_plan.md`
+
+云端目标：
+
+- iOS App 不直接连接云数据库
+- 云端使用 `Backend API + PostgreSQL`
+- 部署方式优先使用 `Docker Compose`
+- 云测数据先部署在 `staging`，不污染生产数据
 
 ## 8. 状态管理方案
 
@@ -513,9 +541,13 @@ Today 右上角入口：
 - 顶部标题：`Pomodoro Stats`
 - 中部为大尺寸 3D 立体饼图，作为页面主视觉
 - 左滑可切换到竖状占比图，右滑返回 3D 饼图
-- 图表必须直接展示各 Plan / Item 的占比、时长和总量，避免只有装饰图形看不出真实比例
+- 饼图必须直接展示各 Plan / Item 的占比和时长，避免只有装饰图形看不出真实比例
+- 饼图上层不得显示总时长；饼图存在的意义是展示分布
+- 饼图图例只展示名称、百分比和时间，不展示进度条
+- 饼图默认展示 `Top 5 + Other`，点击模式胶囊后可切换为 `All Plans` 全量展示
+- 竖状图按时间序列展示，纵轴为专注时长，横轴随时间维度变化
 - 图表下方为四项固定数字统计区
-- 最底部为时间维度切换：Today / Week / Month
+- 最底部为时间维度切换：Today / Week / Month / Year
 
 #### 统计页边界
 
@@ -759,11 +791,11 @@ UI 说明：
 │            ◜██████◝                │
 │          ██▒▒▒▓▓██                 │
 │            ◟████◞                  │
-│          Total 125 min             │
 │                                    │
-│ Math     42% · 52 min  ████████    │
-│ English  28% · 35 min  █████       │
-│ Other    30% · 38 min  ██████      │
+│ Top 5                              │
+│ Math          42% · 52 min         │
+│ English       28% · 35 min         │
+│ Other         30% · 38 min         │
 │                                    │
 │ Total Focus Time     125 min       │
 │ Focus Plans                3       │
@@ -779,8 +811,9 @@ UI 说明：
 - 页面从上到下固定为标题、3D 立体饼图 / 竖状占比图、四项数字统计、时间切换
 - 3D 饼图居中，占据页面核心焦点
 - 3D 饼图按不同 Plan 的专注时长分区，带细描边、层叠厚度、错落切片和阴影
-- 图例必须展示百分比、时长和横向占比条；超过 6 类时聚合为 `Other`
-- 竖状图柱高按总时长占比计算，并提供 100% 堆叠条和刻度参考
+- 图例必须展示名称、百分比和时长；默认 `Top 5 + Other`，点击后可展示 `All Plans`
+- 竖状图为时间序列图：Today 为 24 小时，Week 为周一到周日，Month 为本月日期，Year 为 1-12 月
+- 竖状图柱高按专注时长计算，纵轴刻度显示时长，不使用描述性说明文案
 - 下方四项统计卡使用大字号展示
 - 时间粒度切换使用胶囊分段控件风格
 
