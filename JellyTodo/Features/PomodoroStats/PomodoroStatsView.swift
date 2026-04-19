@@ -15,6 +15,7 @@ struct PomodoroStatsView: View {
     var body: some View {
         let stats = store.stats(for: range)
         let segments = store.focusSegments(for: range)
+        let buckets = store.focusTimeBuckets(for: range)
 
         ScrollView {
             VStack(alignment: .leading, spacing: ThemeTokens.Metrics.sectionSpacing) {
@@ -24,9 +25,7 @@ struct PomodoroStatsView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.76)
 
-                timerCard
-
-                chartFlipCard(segments: segments)
+                chartFlipCard(segments: segments, buckets: buckets)
 
                 fixedStatsGrid(stats: stats, planCount: segments.count)
 
@@ -42,7 +41,7 @@ struct PomodoroStatsView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func chartFlipCard(segments: [PlanFocusSegment]) -> some View {
+    private func chartFlipCard(segments: [PlanFocusSegment], buckets: [FocusTimeBucket]) -> some View {
         JellyCard {
             ZStack {
                 if chartMode == .pie {
@@ -58,8 +57,10 @@ struct PomodoroStatsView: View {
                     ))
                 } else {
                     FocusBarChartView(
-                        segments: segments,
+                        buckets: buckets,
+                        range: range,
                         themeMode: store.settings.themeMode,
+                        language: language,
                         emptyTitle: L10n.t(.noPomodoroData, language),
                         emptyGuide: L10n.t(.noPomodoroGuide, language)
                     )
@@ -91,80 +92,6 @@ struct PomodoroStatsView: View {
                     }
                 }
         )
-    }
-
-    private var timerCard: some View {
-        JellyCard {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.t(.timer, language))
-                            .font(ThemeTokens.Typography.sectionTitle)
-                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
-
-                        if let timerTargetTodo {
-                            Text(timerTargetTodo.title)
-                                .font(ThemeTokens.Typography.caption)
-                                .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                                .lineLimit(1)
-                        } else {
-                            Text(L10n.t(.noPomodoroGuide, language))
-                                .font(ThemeTokens.Typography.caption)
-                                .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                                .lineLimit(2)
-                                .minimumScaleFactor(0.86)
-                        }
-                    }
-
-                    Spacer()
-
-                    Text(displayRemainingSeconds.formattedClock())
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.74)
-                }
-
-                ProgressView(value: store.timerState.progress)
-                    .tint(ThemeTokens.accent(for: store.settings.themeMode))
-
-                HStack(spacing: 12) {
-                    if store.timerState.isRunning {
-                        CapsuleButton(title: L10n.t(.pause, language)) {
-                            store.pausePomodoro()
-                        }
-
-                        CapsuleButton(title: L10n.t(.discard, language)) {
-                            store.stopPomodoro(discard: true)
-                        }
-                    } else if store.timerState.isPaused {
-                        CapsuleButton(title: L10n.t(.resume, language)) {
-                            store.resumePomodoro()
-                        }
-
-                        CapsuleButton(title: L10n.t(.discard, language)) {
-                            store.stopPomodoro(discard: true)
-                        }
-                    } else {
-                        CapsuleButton(
-                            title: L10n.t(.startFocus, language),
-                            foreground: canStartTimer ? ThemeTokens.Colors.textPrimary : ThemeTokens.Colors.textSecondary
-                        ) {
-                            guard let timerTargetTodo else { return }
-                            store.startPomodoro(
-                                mode: .focus,
-                                relatedTodoID: timerTargetTodo.id,
-                                durationSeconds: max(timerTargetTodo.dailyDurationMinutes, 1) * 60,
-                                direction: timerTargetTodo.focusTimerDirection
-                            )
-                        }
-                        .disabled(!canStartTimer)
-                    }
-                }
-            }
-            .padding(22)
-        }
     }
 
     private func fixedStatsGrid(stats: PomodoroStats, planCount: Int) -> some View {
@@ -218,26 +145,6 @@ struct PomodoroStatsView: View {
         }
     }
 
-    private var timerTargetTodo: TodoItem? {
-        if let initialRelatedTodoID,
-           let todo = store.todos.first(where: { $0.id == initialRelatedTodoID }) {
-            return todo
-        }
-
-        return store.todayTodos.first
-    }
-
-    private var canStartTimer: Bool {
-        timerTargetTodo != nil && !store.timerState.isRunning && !store.timerState.isPaused
-    }
-
-    private var displayRemainingSeconds: Int {
-        if store.timerState.isRunning || store.timerState.isPaused {
-            return store.timerState.displaySeconds
-        }
-
-        return timerTargetTodo.map { max($0.dailyDurationMinutes, 1) * 60 } ?? 0
-    }
 }
 
 private enum PomodoroChartMode {

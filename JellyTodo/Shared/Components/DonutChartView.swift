@@ -99,6 +99,27 @@ struct Pie3DChartView: View {
     let emptyTitle: String
     let emptyGuide: String
 
+    @State private var showsAllSegments = false
+
+    private var displaySegments: [PlanFocusSegment] {
+        let sortedSegments = segments.sorted { $0.seconds > $1.seconds }
+        guard !showsAllSegments else { return sortedSegments }
+        guard sortedSegments.count > 5 else { return sortedSegments }
+
+        let topSegments = Array(sortedSegments.prefix(5))
+        let otherSegments = sortedSegments.dropFirst(5)
+        let otherSeconds = otherSegments.reduce(0) { $0 + $1.seconds }
+        let otherItemCount = otherSegments.reduce(0) { $0 + $1.itemCount }
+        return topSegments + [
+            PlanFocusSegment(
+                id: UUID(uuidString: "00000000-0000-0000-0000-000000000999") ?? UUID(),
+                title: "Other",
+                seconds: otherSeconds,
+                itemCount: otherItemCount
+            )
+        ]
+    }
+
     private var totalSeconds: Int {
         segments.reduce(0) { $0 + $1.seconds }
     }
@@ -158,27 +179,59 @@ struct Pie3DChartView: View {
             .frame(height: 260)
 
             if !segments.isEmpty {
-                VStack(spacing: 10) {
-                    ForEach(Array(segments.prefix(4).enumerated()), id: \.element.id) { index, segment in
-                        HStack(spacing: 10) {
-                            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                                .fill(color(for: index))
-                                .frame(width: 22, height: 12)
+                VStack(alignment: .leading, spacing: 12) {
+                    if segments.count > 5 {
+                        Button {
+                            withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                                showsAllSegments.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: 8) {
+                                Text(showsAllSegments ? "All Plans" : "Top 5")
+                                    .font(ThemeTokens.Typography.caption)
+                                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
-                            Text(segment.title)
-                                .font(ThemeTokens.Typography.caption)
-                                .foregroundStyle(ThemeTokens.Colors.textPrimary)
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Text(segment.seconds.formattedMinutesText())
-                                .font(ThemeTokens.Typography.caption)
-                                .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                                .lineLimit(1)
+                                Image(systemName: showsAllSegments ? "chevron.up" : "chevron.down")
+                                    .font(.system(size: 12, weight: .black))
+                                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                            }
+                            .padding(.horizontal, 14)
+                            .frame(height: 36)
+                            .background(ThemeTokens.card(for: themeMode))
+                            .clipShape(Capsule())
                         }
+                        .buttonStyle(.plain)
+                    }
+
+                    ForEach(Array(displaySegments.enumerated()), id: \.element.id) { index, segment in
+                        pieLegendRow(segment: segment, index: index)
                     }
                 }
+            }
+        }
+    }
+
+    private func pieLegendRow(segment: PlanFocusSegment, index: Int) -> some View {
+        let percentage = percentage(for: segment)
+
+        return VStack(spacing: 7) {
+            HStack(spacing: 10) {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(color(for: index))
+                    .frame(width: 22, height: 12)
+
+                Text(segment.title)
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                Text("\(percentageText(percentage)) · \(segment.seconds.formattedMinutesText())")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.76)
             }
         }
     }
@@ -194,7 +247,7 @@ struct Pie3DChartView: View {
                 )
         } else {
             ZStack {
-                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                ForEach(Array(displaySegments.enumerated()), id: \.element.id) { index, segment in
                     let angles = angleRange(for: index)
                     Pie3DSliceShape(startAngle: angles.start, endAngle: angles.end)
                         .fill(color(for: index))
@@ -210,8 +263,8 @@ struct Pie3DChartView: View {
 
     private func angleRange(for index: Int) -> (start: Angle, end: Angle) {
         let total = max(Double(totalSeconds), 1)
-        let startValue = Double(segments.prefix(index).reduce(0) { $0 + $1.seconds }) / total
-        let endValue = Double(segments.prefix(index + 1).reduce(0) { $0 + $1.seconds }) / total
+        let startValue = Double(displaySegments.prefix(index).reduce(0) { $0 + $1.seconds }) / total
+        let endValue = Double(displaySegments.prefix(index + 1).reduce(0) { $0 + $1.seconds }) / total
         return (.degrees(startValue * 360 - 90), .degrees(endValue * 360 - 90))
     }
 
@@ -224,9 +277,18 @@ struct Pie3DChartView: View {
 
     private func middleAngle(for index: Int) -> Double {
         let total = max(Double(totalSeconds), 1)
-        let startValue = Double(segments.prefix(index).reduce(0) { $0 + $1.seconds }) / total
-        let endValue = Double(segments.prefix(index + 1).reduce(0) { $0 + $1.seconds }) / total
+        let startValue = Double(displaySegments.prefix(index).reduce(0) { $0 + $1.seconds }) / total
+        let endValue = Double(displaySegments.prefix(index + 1).reduce(0) { $0 + $1.seconds }) / total
         return ((startValue + endValue) / 2) * 360 - 90
+    }
+
+    private func percentage(for segment: PlanFocusSegment) -> CGFloat {
+        guard totalSeconds > 0 else { return 0 }
+        return CGFloat(segment.seconds) / CGFloat(totalSeconds)
+    }
+
+    private func percentageText(_ value: CGFloat) -> String {
+        "\(Int((value * 100).rounded()))%"
     }
 
     private func color(for index: Int) -> Color {
@@ -235,39 +297,29 @@ struct Pie3DChartView: View {
 }
 
 struct FocusBarChartView: View {
-    let segments: [PlanFocusSegment]
+    let buckets: [FocusTimeBucket]
+    let range: PomodoroStatsRange
     let themeMode: AppThemeMode
+    let language: AppLanguage
     let emptyTitle: String
     let emptyGuide: String
 
+    private var totalSeconds: Int {
+        buckets.reduce(0) { $0 + $1.seconds }
+    }
+
     private var maxSeconds: Int {
-        max(segments.map(\.seconds).max() ?? 1, 1)
+        max(buckets.map(\.seconds).max() ?? 1, 1)
+    }
+
+    private var yAxisValues: [Int] {
+        let maxValue = niceAxisMax(maxSeconds)
+        return [maxValue, maxValue * 3 / 4, maxValue / 2, maxValue / 4, 0]
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Focus Bars")
-                        .font(ThemeTokens.Typography.sectionTitle)
-                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
-
-                    Text("Swipe right to return")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
-                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                }
-
-                Spacer()
-
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 22, weight: .bold))
-                    .foregroundStyle(ThemeTokens.accent(for: themeMode))
-                    .frame(width: 48, height: 48)
-                    .background(ThemeTokens.background(for: themeMode).opacity(0.78))
-                    .clipShape(Circle())
-            }
-
-            if segments.isEmpty {
+        VStack(alignment: .leading, spacing: 18) {
+            if buckets.isEmpty || totalSeconds == 0 {
                 VStack(spacing: 8) {
                     RoundedRectangle(cornerRadius: 22, style: .continuous)
                         .fill(ThemeTokens.card(for: themeMode))
@@ -291,45 +343,70 @@ struct FocusBarChartView: View {
                         }
                 }
             } else {
-                HStack(alignment: .bottom, spacing: 12) {
-                    ForEach(Array(segments.prefix(6).enumerated()), id: \.element.id) { index, segment in
-                        barColumn(segment: segment, index: index)
+                VStack(spacing: 14) {
+                    HStack(alignment: .bottom, spacing: 8) {
+                        VStack(alignment: .trailing, spacing: 0) {
+                            ForEach(yAxisValues, id: \.self) { value in
+                                Text(axisLabel(seconds: value))
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundStyle(ThemeTokens.Colors.textSecondary.opacity(0.78))
+                                    .frame(height: 58, alignment: value == 0 ? .bottom : .top)
+                            }
+                        }
+                        .frame(width: 50, height: 290)
+
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            ZStack(alignment: .bottomLeading) {
+                                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                    .fill(ThemeTokens.background(for: themeMode).opacity(0.54))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 28, style: .continuous)
+                                            .stroke(.white.opacity(0.54), lineWidth: 1)
+                                    )
+
+                                VStack(spacing: 57) {
+                                    ForEach(yAxisValues, id: \.self) { value in
+                                        Rectangle()
+                                            .fill(ThemeTokens.Colors.textSecondary.opacity(value == 0 ? 0.2 : 0.11))
+                                            .frame(height: 1)
+                                    }
+                                }
+                                .padding(.horizontal, 14)
+                                .padding(.bottom, 44)
+
+                                HStack(alignment: .bottom, spacing: barSpacing) {
+                                    ForEach(Array(buckets.enumerated()), id: \.element.id) { index, bucket in
+                                        bucketColumn(bucket: bucket, index: index)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.bottom, 12)
+                            }
+                            .frame(width: chartContentWidth, height: 290, alignment: .bottomLeading)
+                        }
+                        .frame(height: 290)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .frame(height: 220, alignment: .bottom)
                 .padding(.top, 8)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(ThemeTokens.Colors.textSecondary.opacity(0.18))
-                        .frame(height: 1)
-                        .offset(y: 2)
-                }
             }
         }
-        .frame(height: 318)
+        .frame(height: 374)
     }
 
-    private func barColumn(segment: PlanFocusSegment, index: Int) -> some View {
-        let ratio = CGFloat(segment.seconds) / CGFloat(maxSeconds)
-        let height = max(42, ratio * 168)
+    private func bucketColumn(bucket: FocusTimeBucket, index: Int) -> some View {
+        let ratio = CGFloat(bucket.seconds) / CGFloat(maxSeconds)
+        let height = bucket.seconds == 0 ? 4 : max(10, ratio * 150)
         let color = ChartPalette.colors(for: themeMode)[index % ChartPalette.colors(for: themeMode).count]
 
-        return VStack(spacing: 8) {
-            Text(segment.seconds.formattedMinutesText())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(ThemeTokens.Colors.textSecondary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
-
+        return VStack(spacing: 6) {
             ZStack(alignment: .top) {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: barCornerRadius, style: .continuous)
                     .fill(color.opacity(0.32))
                     .frame(height: height)
-                    .offset(x: 5, y: 7)
+                    .offset(x: min(4, barWidth / 3), y: 6)
                     .blur(radius: 0.3)
 
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: barCornerRadius, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -342,36 +419,110 @@ struct FocusBarChartView: View {
                         )
                     )
                     .frame(height: height)
-                    .overlay(alignment: .topLeading) {
-                        Capsule()
-                            .fill(.white.opacity(0.55))
-                            .frame(width: 12, height: max(24, height * 0.48))
-                            .padding(.top, 10)
-                            .padding(.leading, 9)
-                    }
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: barCornerRadius, style: .continuous)
                             .stroke(.white.opacity(0.66), lineWidth: 1)
                     )
                     .shadow(color: .white.opacity(0.42), radius: 2, x: -1, y: -1)
                     .shadow(color: .black.opacity(0.13), radius: 8, x: 3, y: 8)
             }
-            .frame(maxHeight: 178, alignment: .bottom)
+            .frame(width: barWidth, height: 230, alignment: .bottom)
 
-            Text(shortLabel(segment.title))
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundStyle(ThemeTokens.Colors.textPrimary)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .minimumScaleFactor(0.72)
-                .frame(height: 32)
+            Text(visibleXAxisLabel(bucket.label, index: index))
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(ThemeTokens.Colors.textPrimary.opacity(xAxisLabelOpacity(index: index)))
+                .lineLimit(1)
+                .minimumScaleFactor(0.58)
+                .frame(height: 24)
         }
-        .frame(maxWidth: .infinity)
+        .frame(width: columnWidth)
     }
 
-    private func shortLabel(_ title: String) -> String {
-        if title.count <= 5 { return title }
-        return String(title.prefix(5))
+    private var columnWidth: CGFloat {
+        switch range {
+        case .today:
+            return 20
+        case .week:
+            return 38
+        case .month:
+            return 18
+        case .year:
+            return 28
+        }
+    }
+
+    private var barWidth: CGFloat {
+        switch range {
+        case .today:
+            return 13
+        case .week:
+            return 28
+        case .month:
+            return 11
+        case .year:
+            return 20
+        }
+    }
+
+    private var barSpacing: CGFloat {
+        switch range {
+        case .today:
+            return 6
+        case .week:
+            return 12
+        case .month:
+            return 5
+        case .year:
+            return 8
+        }
+    }
+
+    private var chartContentWidth: CGFloat {
+        let count = CGFloat(max(buckets.count, 1))
+        let totalColumnWidth = count * columnWidth
+        let totalSpacing = CGFloat(max(buckets.count - 1, 0)) * barSpacing
+        return max(300, totalColumnWidth + totalSpacing + 32)
+    }
+
+    private var barCornerRadius: CGFloat {
+        max(2, barWidth / 2)
+    }
+
+    private func visibleXAxisLabel(_ label: String, index: Int) -> String {
+        switch range {
+        case .today:
+            return index % 3 == 0 ? label : ""
+        case .week:
+            return label
+        case .month:
+            return index == 0 || (index + 1) % 5 == 0 ? label : ""
+        case .year:
+            return label
+        }
+    }
+
+    private func xAxisLabelOpacity(index: Int) -> Double {
+        visibleXAxisLabel(buckets[index].label, index: index).isEmpty ? 0 : 1
+    }
+
+    private func axisLabel(seconds: Int) -> String {
+        seconds.formattedMinutesText()
+    }
+
+    private func niceAxisMax(_ seconds: Int) -> Int {
+        guard seconds > 0 else { return 60 }
+        let minutes = max(Int(ceil(Double(seconds) / 60)), 1)
+        let step: Int
+        if minutes <= 30 {
+            step = 10
+        } else if minutes <= 120 {
+            step = 30
+        } else if minutes <= 360 {
+            step = 60
+        } else {
+            step = 120
+        }
+        return Int(ceil(Double(minutes) / Double(step))) * step * 60
     }
 }
 

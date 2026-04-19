@@ -360,6 +360,51 @@ final class AppStore: ObservableObject {
         .sorted { $0.seconds > $1.seconds }
     }
 
+    func focusTimeBuckets(for range: PomodoroStatsRange) -> [FocusTimeBucket] {
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
+        let now = Date()
+        let focusSessions = sessions(in: range).filter { $0.type == .focus }
+
+        switch range {
+        case .today:
+            return (0..<24).map { hour in
+                let seconds = focusSessions
+                    .filter { calendar.component(.hour, from: $0.endAt) == hour }
+                    .reduce(0) { $0 + $1.durationSeconds }
+                return FocusTimeBucket(id: "hour-\(hour)", label: "\(hour)", seconds: seconds)
+            }
+
+        case .week:
+            guard let week = calendar.dateInterval(of: .weekOfYear, for: now) else { return [] }
+            let symbols = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            return (0..<7).map { dayOffset in
+                let date = calendar.date(byAdding: .day, value: dayOffset, to: week.start) ?? week.start
+                let seconds = focusSessions
+                    .filter { calendar.isDate($0.endAt, inSameDayAs: date) }
+                    .reduce(0) { $0 + $1.durationSeconds }
+                return FocusTimeBucket(id: "weekday-\(dayOffset)", label: symbols[dayOffset], seconds: seconds)
+            }
+
+        case .month:
+            guard let days = calendar.range(of: .day, in: .month, for: now) else { return [] }
+            return days.map { day in
+                let seconds = focusSessions
+                    .filter { calendar.component(.day, from: $0.endAt) == day }
+                    .reduce(0) { $0 + $1.durationSeconds }
+                return FocusTimeBucket(id: "month-day-\(day)", label: "\(day)", seconds: seconds)
+            }
+
+        case .year:
+            return (1...12).map { month in
+                let seconds = focusSessions
+                    .filter { calendar.component(.month, from: $0.endAt) == month }
+                    .reduce(0) { $0 + $1.durationSeconds }
+                return FocusTimeBucket(id: "year-month-\(month)", label: "\(month)", seconds: seconds)
+            }
+        }
+    }
+
     func focusedSeconds(for todoID: UUID) -> Int {
         pomodoroSessions
             .filter { $0.type == .focus && $0.relatedTodoID == todoID }
@@ -579,7 +624,8 @@ final class AppStore: ObservableObject {
     }
 
     private func sessions(in range: PomodoroStatsRange) -> [PomodoroSession] {
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.firstWeekday = 2
         let now = Date()
 
         return pomodoroSessions.filter { session in
@@ -590,6 +636,8 @@ final class AppStore: ObservableObject {
                 return calendar.isDate(session.endAt, equalTo: now, toGranularity: .weekOfYear)
             case .month:
                 return calendar.isDate(session.endAt, equalTo: now, toGranularity: .month)
+            case .year:
+                return calendar.isDate(session.endAt, equalTo: now, toGranularity: .year)
             }
         }
     }

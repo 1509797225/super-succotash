@@ -383,6 +383,7 @@ enum PomodoroStatsRange: String, CaseIterable, Identifiable {
     case today
     case week
     case month
+    case year
 
     var id: String { rawValue }
 
@@ -402,6 +403,8 @@ enum PomodoroStatsRange: String, CaseIterable, Identifiable {
                 return "本周"
             case .month:
                 return "本月"
+            case .year:
+                return "今年"
             }
         }
     }
@@ -475,6 +478,12 @@ struct PlanFocusSegment: Identifiable, Equatable {
     let title: String
     let seconds: Int
     let itemCount: Int
+}
+
+struct FocusTimeBucket: Identifiable, Equatable {
+    let id: String
+    let label: String
+    let seconds: Int
 }
 
 struct TaskFocusSummary: Identifiable, Equatable {
