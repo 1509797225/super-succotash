@@ -70,6 +70,7 @@ xcodebuild -project JellyTodo.xcodeproj \
 
 - 改功能范围、页面结构、数据模型、主题规则、交互规则时，先更新 `ios_todo_app_technical_plan.md`，再改代码。
 - 改本地数据库、云同步、云测数据、部署环境时，同步更新 `data_management_and_cloud_sync_plan.md`。
+- 改账号登录、匿名迁移、token、订阅账号绑定时，同步更新 `account_auth_integration_plan.md`。
 - 只改内部实现且不影响外部行为时，可以只改代码。
 - 每次里程碑提交前，检查核心文档与实现是否一致。
 - `README.md` 只负责项目介绍、运行方式和协作提示，不承载完整 PRD。
@@ -108,6 +109,14 @@ data_management_and_cloud_sync_plan.md
 推荐方向为 `SQLite + GRDB` 本地数据库、`Local-first` 增量同步、云端 `PostgreSQL + Backend API`，并先部署 staging 云测环境。部署优先用 Docker Compose；如果服务器拉取 Docker Hub 镜像超时，则使用 Ubuntu 原生部署脚本。
 
 未来商业化按 `Free / Pro` 两档设计：Free 仅本机 SQLite 持久化，卸载 App 后数据随沙盒删除；Pro 开启云备份、云恢复和多设备同步。当前已具备 StoreKit 2 端侧骨架、staging 交易同步接口、云端权益闸口、前台自动同步和云端恢复点；真实订阅还需要在 App Store Connect 创建商品并接入 App Store Server API 级交易验签。
+
+账号接入路线记录在：
+
+```text
+account_auth_integration_plan.md
+```
+
+当前推荐采用 `Sign in with Apple + 自建轻量认证层`，用户数据、订阅权益和云同步归属仍由 JellyTodo 后端管理。
 
 开发期调试浮层已支持查看本地数据库摘要，并手动 mock `Free / Pro` 权益状态；mock 结果会写入本机 SQLite 的 `entitlement_state`。
 

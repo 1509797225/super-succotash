@@ -8,6 +8,7 @@
 
 - `ios_todo_app_technical_plan.md` 仍是项目唯一产品与技术真相源。
 - 本文档是核心技术方案的数据专项附录，涉及数据模型、存储、同步、云端环境的改动必须同步更新本文档。
+- `account_auth_integration_plan.md` 是账号与认证专项附录，涉及登录方式、匿名迁移、token、订阅账号绑定和同步鉴权时必须同步更新。
 - 代码实现变更如果影响字段、表结构、同步协议、云测数据规则，必须先更新本文档，再改代码。
 
 ## 2. 当前状态
@@ -18,7 +19,7 @@
 - 状态入口：`AppStore`
 - 数据范围：Plan、Today、TodoItem、PomodoroSession、UserProfile、AppSettings、调试插桩数据
 - 云端能力：staging API 已部署，端侧 Debug 入口支持健康检查、只读拉取云测数据，Set 页支持 Pro/mock Pro 手动同步、云端备份点创建、云端恢复点列表和显式恢复
-- 账号体系：暂无
+- 账号体系：暂无正式账号；专项方案已定义在 `account_auth_integration_plan.md`，推荐一期采用 `Sign in with Apple + 自建轻量认证层`
 - 订阅体系：端侧已接入 StoreKit 2 骨架，服务端已建立 `cloud_entitlements` 权益闸口和 staging 交易同步接口；staging 匿名身份当前自动授予 Pro 同步资格，便于联调
 
 当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，并完成 `change_logs`、本地恢复点、云端备份点、Set 页 `Backup & Sync` 入口、StoreKit 2 端侧骨架、StoreKit staging 交易同步、匿名云身份、服务端权益闸口、staging 手动 push、基础 pull merge 和安全版前台自动同步。正式生产级同步仍未完成，因为还缺 App Store Server API 级交易验签、多设备冲突策略和云端恢复后的“设为新基线”策略。
