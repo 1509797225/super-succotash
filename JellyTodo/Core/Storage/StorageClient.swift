@@ -1,6 +1,6 @@
 import Foundation
 
-struct StorageSnapshot {
+struct StorageSnapshot: Codable, Equatable {
     var todos: [TodoItem]
     var planTasks: [PlanTask]
     var pomodoroSessions: [PomodoroSession]

@@ -1,6 +1,6 @@
 # JellyTodo
 
-`JellyTodo` 是一个原生 iOS 待办与番茄钟应用，主打大字号、大卡片、超大圆角和轻拟态果冻质感。项目以快速落地 MVP 为目标，当前功能全部本地运行，不依赖登录、网络或服务端。
+`JellyTodo` 是一个原生 iOS 待办与番茄钟应用，主打大字号、大卡片、超大圆角和轻拟态果冻质感。项目以快速落地 MVP 为目标，当前以本地优先为核心，已接入 staging 云同步与 Pro 云备份能力。
 
 GitHub 仓库：`1509797225/super-succotash`
 
@@ -8,7 +8,7 @@ GitHub 仓库：`1509797225/super-succotash`
 
 - `Plan`：展示可折叠任务组，任务组下可继续新增 item，item 可左滑加入 Today。
 - `Today`：展示今日待办，支持新增、编辑、删除、完成状态切换。
-- `Set`：本地个人资料、主题、偏好设置与关于信息。
+- `Set`：本地个人资料、主题、偏好设置、订阅状态、备份与同步。
 - `Task Sheet`：轻点任务打开底部半模态操作面板，可进入专注、编辑、删除、查看已专注时长。
 - `Focus`：任务级番茄钟专注页，支持正向/倒向计时、暂停、继续、停止。
 - `Landscape Focus`：Focus 页支持手动横竖屏切换，横屏隐藏底部 TabBar。
@@ -23,7 +23,8 @@ GitHub 仓库：`1509797225/super-succotash`
 - UI：SwiftUI
 - 架构：MVVM + 单向数据流
 - 导航：NavigationStack + TabView
-- 存储：UserDefaults + Codable
+- 存储：SQLite + UserDefaults/Codable 回滚备份
+- 云端：Node.js + PostgreSQL staging API
 - 图表：自绘 Donut / 3D Pie 组件
 - 工程：单 Target 原生 Xcode iOS App
 
@@ -86,16 +87,15 @@ git config user.email "zyl1509797225@gmail.com"
 
 ## 当前范围
 
-本期不包含：
+本期暂不包含：
 
 - 账号登录或注册
-- 云同步
 - 多端同步
 - 通知推送
 - Widget
 - 服务端资料系统
 
-所有任务、设置与番茄钟记录均保存在本地，卸载 App 后数据清空。
+Free 数据只保存在本机，卸载 App 后随沙盒清空；Pro 路线已接入云同步、云端备份点和显式云端恢复的一期能力。
 
 ## 数据与云同步规划
 
@@ -107,7 +107,7 @@ data_management_and_cloud_sync_plan.md
 
 推荐方向为 `SQLite + GRDB` 本地数据库、`Local-first` 增量同步、云端 `PostgreSQL + Backend API`，并先部署 staging 云测环境。部署优先用 Docker Compose；如果服务器拉取 Docker Hub 镜像超时，则使用 Ubuntu 原生部署脚本。
 
-未来商业化按 `Free / Pro` 两档设计：Free 仅本机 SQLite 持久化，卸载 App 后数据随沙盒删除；Pro 才开启云备份、云恢复和多设备同步。
+未来商业化按 `Free / Pro` 两档设计：Free 仅本机 SQLite 持久化，卸载 App 后数据随沙盒删除；Pro 开启云备份、云恢复和多设备同步。当前已具备 StoreKit 2 端侧骨架、staging 交易同步接口、云端权益闸口、前台自动同步和云端恢复点；真实订阅还需要在 App Store Connect 创建商品并接入 App Store Server API 级交易验签。
 
 开发期调试浮层已支持查看本地数据库摘要，并手动 mock `Free / Pro` 权益状态；mock 结果会写入本机 SQLite 的 `entitlement_state`。
 

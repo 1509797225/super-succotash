@@ -67,6 +67,166 @@ struct DatabaseClient {
         }
     }
 
+    func loadSyncHistory(limit: Int = 20) -> [SyncHistoryEntry] {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            return try readSyncHistory(limit: limit, from: database)
+        } catch {
+            return []
+        }
+    }
+
+    func loadLocalBackupSnapshots(limit: Int = 10) -> [LocalBackupSnapshot] {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            return try readLocalBackupSnapshots(limit: limit, from: database)
+        } catch {
+            return []
+        }
+    }
+
+    func createLocalBackup(snapshot: StorageSnapshot, reason: String) -> LocalBackupSnapshot? {
+        do {
+            let backup = try writeSnapshotFile(snapshot: snapshot, reason: reason)
+            try writeThrowing { database in
+                try insertLocalBackupSnapshot(backup, in: database)
+            }
+            return backup
+        } catch {
+            assertionFailure("SQLite backup failed: \(error.localizedDescription)")
+            return nil
+        }
+    }
+
+    func loadBackupSnapshot(_ backup: LocalBackupSnapshot) -> StorageSnapshot? {
+        do {
+            let data = try Data(contentsOf: URL(fileURLWithPath: backup.snapshotPath))
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(StorageSnapshot.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    func insertSyncHistory(_ entry: SyncHistoryEntry) {
+        write { database in
+            try insertSyncHistory(entry, in: database)
+        }
+    }
+
+    func appendChangeLog(entityType: String, entityID: String, operation: String, payload: String) {
+        write { database in
+            try insertChangeLog(
+                id: UUID(),
+                entityType: entityType,
+                entityID: entityID,
+                operation: operation,
+                payload: payload,
+                createdAt: Date(),
+                in: database
+            )
+        }
+    }
+
+    func pendingChangeLogCount() -> Int {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            return try countPendingChangeLogs(in: database)
+        } catch {
+            return 0
+        }
+    }
+
+    func pendingChangeLogs(limit: Int = 100) -> [ChangeLogEntry] {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            return try readPendingChangeLogs(limit: limit, from: database)
+        } catch {
+            return []
+        }
+    }
+
+    func markChangeLogsSynced(ids: [UUID], syncedAt: Date = Date()) {
+        guard !ids.isEmpty else { return }
+        write { database in
+            for id in ids {
+                try markChangeLogSynced(id: id, syncedAt: syncedAt, in: database)
+            }
+        }
+    }
+
+    func loadCloudPullCursor() -> Date? {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            guard let value = try metaValue(for: "cloud_pull_cursor", in: database) else { return nil }
+            return Date(databaseString: value)
+        } catch {
+            return nil
+        }
+    }
+
+    func saveCloudPullCursor(_ cursor: Date) {
+        write { database in
+            try setMetaValue(cursor.databaseString, for: "cloud_pull_cursor", in: database)
+        }
+    }
+
+    func loadLastForegroundAutoSyncAt() -> Date? {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            guard let value = try metaValue(for: "last_foreground_auto_sync_at", in: database) else { return nil }
+            return Date(databaseString: value)
+        } catch {
+            return nil
+        }
+    }
+
+    func saveLastForegroundAutoSyncAt(_ date: Date) {
+        write { database in
+            try setMetaValue(date.databaseString, for: "last_foreground_auto_sync_at", in: database)
+        }
+    }
+
+    func loadCloudIdentity() -> CloudIdentity? {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            guard let value = try metaValue(for: "cloud_identity", in: database),
+                  let data = value.data(using: .utf8)
+            else { return nil }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(CloudIdentity.self, from: data)
+        } catch {
+            return nil
+        }
+    }
+
+    func saveCloudIdentity(_ identity: CloudIdentity) {
+        write { database in
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(identity)
+            guard let value = String(data: data, encoding: .utf8) else { return }
+            try setMetaValue(value, for: "cloud_identity", in: database)
+        }
+    }
+
     func saveSnapshot(_ snapshot: StorageSnapshot) {
         write { database in
             try replacePlanTasks(snapshot.planTasks, in: database)
@@ -79,6 +239,14 @@ struct DatabaseClient {
 
     private func write(_ operation: (OpaquePointer) throws -> Void) {
         do {
+            try writeThrowing(operation)
+        } catch {
+            assertionFailure("SQLite write failed: \(error.localizedDescription)")
+        }
+    }
+
+    private func writeThrowing(_ operation: (OpaquePointer) throws -> Void) throws {
+        do {
             let database = try openDatabase()
             defer { sqlite3_close(database) }
             try setupSchema(in: database)
@@ -86,7 +254,7 @@ struct DatabaseClient {
                 try operation(database)
             }
         } catch {
-            assertionFailure("SQLite write failed: \(error.localizedDescription)")
+            throw error
         }
     }
 
@@ -99,6 +267,35 @@ struct DatabaseClient {
             create: true
         )) ?? fileManager.temporaryDirectory
         return directory.appendingPathComponent("JellyTodo.sqlite")
+    }
+
+    private func backupDirectory() throws -> URL {
+        let directory = databaseURL
+            .deletingLastPathComponent()
+            .appendingPathComponent("Backups", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    private func writeSnapshotFile(snapshot: StorageSnapshot, reason: String) throws -> LocalBackupSnapshot {
+        let id = UUID()
+        let createdAt = Date()
+        let fileURL = try backupDirectory().appendingPathComponent("\(id.uuidString).json")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(snapshot)
+        try data.write(to: fileURL, options: [.atomic])
+
+        return LocalBackupSnapshot(
+            id: id,
+            reason: String(reason.trimmingCharacters(in: .whitespacesAndNewlines).prefix(80)),
+            snapshotPath: fileURL.path,
+            plansCount: snapshot.planTasks.count,
+            todosCount: snapshot.todos.count,
+            sessionsCount: snapshot.pomodoroSessions.count,
+            createdAt: createdAt
+        )
     }
 
     private func openDatabase() throws -> OpaquePointer {
@@ -200,10 +397,31 @@ struct DatabaseClient {
               synced_at TEXT
             );
 
+            CREATE TABLE IF NOT EXISTS sync_history (
+              id TEXT PRIMARY KEY,
+              direction TEXT NOT NULL,
+              status TEXT NOT NULL,
+              changed_count INTEGER NOT NULL DEFAULT 0,
+              message TEXT NOT NULL DEFAULT '',
+              created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS local_backup_snapshots (
+              id TEXT PRIMARY KEY,
+              reason TEXT NOT NULL,
+              snapshot_path TEXT NOT NULL,
+              plans_count INTEGER NOT NULL DEFAULT 0,
+              todos_count INTEGER NOT NULL DEFAULT 0,
+              sessions_count INTEGER NOT NULL DEFAULT 0,
+              created_at TEXT NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_todo_plan_id ON todo_items(plan_id);
             CREATE INDEX IF NOT EXISTS idx_todo_task_date ON todo_items(task_date);
             CREATE INDEX IF NOT EXISTS idx_session_todo_id ON pomodoro_sessions(todo_id);
             CREATE INDEX IF NOT EXISTS idx_session_end_at ON pomodoro_sessions(end_at);
+            CREATE INDEX IF NOT EXISTS idx_sync_history_created_at ON sync_history(created_at);
+            CREATE INDEX IF NOT EXISTS idx_backup_snapshots_created_at ON local_backup_snapshots(created_at);
             """,
             in: database
         )
@@ -354,6 +572,55 @@ struct DatabaseClient {
         return result.first ?? .default
     }
 
+    private func readSyncHistory(limit: Int, from database: OpaquePointer) throws -> [SyncHistoryEntry] {
+        try rows(
+            sql: """
+            SELECT id, direction, status, changed_count, message, created_at
+            FROM sync_history
+            ORDER BY created_at DESC
+            LIMIT ?;
+            """,
+            in: database,
+            bindings: { statement in
+                bind(limit, at: 1, statement: statement)
+            }
+        ) { statement in
+            SyncHistoryEntry(
+                id: uuid(column: 0, statement: statement),
+                direction: SyncDirection(rawValue: string(column: 1, statement: statement)) ?? .full,
+                status: SyncStatus(rawValue: string(column: 2, statement: statement)) ?? .skipped,
+                changedCount: int(column: 3, statement: statement),
+                message: string(column: 4, statement: statement),
+                createdAt: date(column: 5, statement: statement)
+            )
+        }
+    }
+
+    private func readLocalBackupSnapshots(limit: Int, from database: OpaquePointer) throws -> [LocalBackupSnapshot] {
+        try rows(
+            sql: """
+            SELECT id, reason, snapshot_path, plans_count, todos_count, sessions_count, created_at
+            FROM local_backup_snapshots
+            ORDER BY created_at DESC
+            LIMIT ?;
+            """,
+            in: database,
+            bindings: { statement in
+                bind(limit, at: 1, statement: statement)
+            }
+        ) { statement in
+            LocalBackupSnapshot(
+                id: uuid(column: 0, statement: statement),
+                reason: string(column: 1, statement: statement),
+                snapshotPath: string(column: 2, statement: statement),
+                plansCount: int(column: 3, statement: statement),
+                todosCount: int(column: 4, statement: statement),
+                sessionsCount: int(column: 5, statement: statement),
+                createdAt: date(column: 6, statement: statement)
+            )
+        }
+    }
+
     private func replacePlanTasks(_ planTasks: [PlanTask], in database: OpaquePointer) throws {
         try execute("DELETE FROM plans;", in: database)
         let sql = """
@@ -473,6 +740,116 @@ struct DatabaseClient {
             bind(entitlement.cloudSyncEnabled, at: 2, statement: statement)
             bindOptional(entitlement.expiresAt?.databaseString, at: 3, statement: statement)
             bind(Date().databaseString, at: 4, statement: statement)
+        }
+    }
+
+    private func insertSyncHistory(_ entry: SyncHistoryEntry, in database: OpaquePointer) throws {
+        try run(
+            sql: """
+            INSERT OR REPLACE INTO sync_history (
+              id, direction, status, changed_count, message, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?);
+            """,
+            in: database
+        ) { statement in
+            bind(entry.id.uuidString, at: 1, statement: statement)
+            bind(entry.direction.rawValue, at: 2, statement: statement)
+            bind(entry.status.rawValue, at: 3, statement: statement)
+            bind(entry.changedCount, at: 4, statement: statement)
+            bind(entry.message, at: 5, statement: statement)
+            bind(entry.createdAt.databaseString, at: 6, statement: statement)
+        }
+    }
+
+    private func insertLocalBackupSnapshot(_ backup: LocalBackupSnapshot, in database: OpaquePointer) throws {
+        try run(
+            sql: """
+            INSERT OR REPLACE INTO local_backup_snapshots (
+              id, reason, snapshot_path, plans_count, todos_count, sessions_count, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?);
+            """,
+            in: database
+        ) { statement in
+            bind(backup.id.uuidString, at: 1, statement: statement)
+            bind(backup.reason, at: 2, statement: statement)
+            bind(backup.snapshotPath, at: 3, statement: statement)
+            bind(backup.plansCount, at: 4, statement: statement)
+            bind(backup.todosCount, at: 5, statement: statement)
+            bind(backup.sessionsCount, at: 6, statement: statement)
+            bind(backup.createdAt.databaseString, at: 7, statement: statement)
+        }
+    }
+
+    private func insertChangeLog(
+        id: UUID,
+        entityType: String,
+        entityID: String,
+        operation: String,
+        payload: String,
+        createdAt: Date,
+        in database: OpaquePointer
+    ) throws {
+        try run(
+            sql: """
+            INSERT INTO change_logs (
+              id, entity_type, entity_id, operation, payload, created_at, synced_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, NULL);
+            """,
+            in: database
+        ) { statement in
+            bind(id.uuidString, at: 1, statement: statement)
+            bind(entityType, at: 2, statement: statement)
+            bind(entityID, at: 3, statement: statement)
+            bind(operation, at: 4, statement: statement)
+            bind(payload, at: 5, statement: statement)
+            bind(createdAt.databaseString, at: 6, statement: statement)
+        }
+    }
+
+    private func countPendingChangeLogs(in database: OpaquePointer) throws -> Int {
+        try rows(
+            sql: "SELECT COUNT(*) FROM change_logs WHERE synced_at IS NULL;",
+            in: database
+        ) { statement in
+            int(column: 0, statement: statement)
+        }.first ?? 0
+    }
+
+    private func readPendingChangeLogs(limit: Int, from database: OpaquePointer) throws -> [ChangeLogEntry] {
+        try rows(
+            sql: """
+            SELECT id, entity_type, entity_id, operation, payload, created_at
+            FROM change_logs
+            WHERE synced_at IS NULL
+            ORDER BY created_at ASC
+            LIMIT ?;
+            """,
+            in: database,
+            bindings: { statement in
+                bind(limit, at: 1, statement: statement)
+            }
+        ) { statement in
+            ChangeLogEntry(
+                id: uuid(column: 0, statement: statement),
+                entityType: string(column: 1, statement: statement),
+                entityID: string(column: 2, statement: statement),
+                operation: string(column: 3, statement: statement),
+                payload: string(column: 4, statement: statement),
+                createdAt: date(column: 5, statement: statement)
+            )
+        }
+    }
+
+    private func markChangeLogSynced(id: UUID, syncedAt: Date, in database: OpaquePointer) throws {
+        try run(
+            sql: "UPDATE change_logs SET synced_at = ? WHERE id = ?;",
+            in: database
+        ) { statement in
+            bind(syncedAt.databaseString, at: 1, statement: statement)
+            bind(id.uuidString, at: 2, statement: statement)
         }
     }
 
@@ -632,6 +1009,11 @@ private extension Date {
 
     var databaseString: String {
         Self.databaseFormatter.string(from: self)
+    }
+
+    init?(databaseString: String) {
+        guard let date = Self.databaseFormatter.date(from: databaseString) else { return nil }
+        self = date
     }
 }
 

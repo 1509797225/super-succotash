@@ -12,6 +12,7 @@
 		1311E0D4A4D469D76579494A /* PomodoroStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */; };
 		18D9A4E2C3B14E51A8D70424 /* DatabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */; };
 		1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61CC7569C1C2EB985431761 /* AppStore.swift */; };
+		21A7D2D3368B4F67A9C45221 /* StoreKitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A7D2D2368B4F67A9C45221 /* StoreKitClient.swift */; };
 		251B4ECE11D207FF38A94411 /* TodoRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D9168539CEEEB854A4A3073 /* TodoRow.swift */; };
 		2B580DC1B8776A28EE5C51C8 /* JellyTodoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */; };
 		35FBBC871FACB54DF40614AF /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2DBB409DDF9AE419764EFA /* Extensions.swift */; };
@@ -32,6 +33,7 @@
 
 /* Begin PBXFileReference section */
 		18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseClient.swift; sourceTree = "<group>"; };
+		21A7D2D2368B4F67A9C45221 /* StoreKitClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreKitClient.swift; sourceTree = "<group>"; };
 		2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JellyTodoApp.swift; sourceTree = "<group>"; };
 		2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PomodoroStatsView.swift; sourceTree = "<group>"; };
 		3C376E44067E72899DABFB23 /* CommonComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommonComponents.swift; sourceTree = "<group>"; };
@@ -131,6 +133,7 @@
 			isa = PBXGroup;
 			children = (
 				A61CC7569C1C2EB985431761 /* AppStore.swift */,
+				21A7D2D2368B4F67A9C45221 /* StoreKitClient.swift */,
 			);
 			path = Store;
 			sourceTree = "<group>";
@@ -323,6 +326,7 @@
 				B2498A326283A62F78110AA2 /* StorageClient.swift in Sources */,
 				18D9A4E2C3B14E51A8D70424 /* DatabaseClient.swift in Sources */,
 				1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */,
+				21A7D2D3368B4F67A9C45221 /* StoreKitClient.swift in Sources */,
 				98A2A59F5385365D2BE3BC75 /* ThemeTokens.swift in Sources */,
 				35FBBC871FACB54DF40614AF /* Extensions.swift in Sources */,
 				83143B7B5DC6780FB94C79D6 /* PlanView.swift in Sources */,

@@ -12,11 +12,81 @@ struct CloudHealthResponse: Decodable, Equatable {
     let databaseTime: Date
 }
 
+private struct EmptyCloudRequest: Encodable {}
+
+private struct CloudAnonymousAuthResponse: Decodable, Equatable {
+    let userID: String
+    let deviceID: String
+}
+
 struct CloudSyncPullResponse: Decodable, Equatable {
     let cursor: Date
     let plans: [CloudPlan]
     let todoItems: [CloudTodoItem]
     let pomodoroSessions: [CloudPomodoroSession]
+    let appSettings: [CloudAppSettings]
+}
+
+struct CloudSyncPushRequest: Encodable {
+    let userID: String
+    let deviceID: String
+    let changes: [ChangeLogEntry]
+
+    private enum CodingKeys: String, CodingKey {
+        case userID = "userID"
+        case deviceID = "deviceID"
+        case changes
+    }
+}
+
+struct CloudBackupCreateRequest: Encodable {
+    let userID: String
+    let deviceID: String
+    let reason: String
+    let snapshot: StorageSnapshot
+}
+
+struct CloudBackupRestoreRequest: Encodable {
+    let userID: String
+    let snapshotID: UUID
+}
+
+struct CloudBackupListResponse: Decodable, Equatable {
+    let backups: [CloudBackupSnapshot]
+}
+
+struct CloudBackupCreateResponse: Decodable, Equatable {
+    let backup: CloudBackupSnapshot
+}
+
+struct CloudBackupRestoreResponse: Decodable, Equatable {
+    let snapshotID: UUID
+    let snapshot: StorageSnapshot
+}
+
+struct CloudStoreKitEntitlementRequest: Encodable {
+    let userID: String
+    let deviceID: String
+    let productID: String
+    let transactionID: String
+    let originalTransactionID: String
+    let expirationDate: Date?
+    let environment: String
+    let signedTransactionJWS: String
+}
+
+struct CloudEntitlementSyncResponse: Decodable, Equatable {
+    let ok: Bool
+    let userID: String
+    let tier: String
+    let cloudSyncEnabled: Bool
+    let source: String
+    let expiresAt: Date?
+}
+
+struct CloudSyncPushResponse: Decodable, Equatable {
+    let accepted: Int
+    let cursor: Date
 }
 
 struct CloudPlan: Decodable, Equatable {
@@ -89,6 +159,24 @@ struct CloudPomodoroSession: Decodable, Equatable {
     }
 }
 
+struct CloudAppSettings: Decodable, Equatable {
+    let themeMode: AppThemeMode
+    let language: AppLanguage
+    let hapticsEnabled: Bool
+    let pomodoroGoalPerDay: Int
+    let useLargeText: Bool
+    let updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case themeMode = "theme_mode"
+        case language
+        case hapticsEnabled = "haptics_enabled"
+        case pomodoroGoalPerDay = "pomodoro_goal_per_day"
+        case useLargeText = "use_large_text"
+        case updatedAt = "updated_at"
+    }
+}
+
 struct CloudAPIClient {
     var baseURL: URL = CloudConfig.stagingBaseURL
     var session: URLSession = .shared
@@ -97,11 +185,86 @@ struct CloudAPIClient {
         try await get(path: "health")
     }
 
-    func pull(userID: String = CloudConfig.stagingDebugUserID) async throws -> CloudSyncPullResponse {
+    func createAnonymousIdentity() async throws -> CloudIdentity {
+        let response: CloudAnonymousAuthResponse = try await post(path: "auth/anonymous", body: EmptyCloudRequest())
+        return CloudIdentity(userID: response.userID, deviceID: response.deviceID, createdAt: Date())
+    }
+
+    func pull(
+        userID: String = CloudConfig.stagingDebugUserID,
+        since: Date? = nil
+    ) async throws -> CloudSyncPullResponse {
         var components = URLComponents(url: baseURL.appendingPathComponent("sync/pull"), resolvingAgainstBaseURL: false)
-        components?.queryItems = [URLQueryItem(name: "userID", value: userID)]
+        var queryItems = [URLQueryItem(name: "userID", value: userID)]
+        if let since {
+            queryItems.append(URLQueryItem(name: "since", value: Self.iso8601Encoder.string(from: since)))
+        }
+        components?.queryItems = queryItems
         guard let url = components?.url else { throw CloudAPIError.invalidURL }
         return try await get(url: url)
+    }
+
+    func push(
+        changes: [ChangeLogEntry],
+        userID: String = CloudConfig.stagingDebugUserID,
+        deviceID: String = "debug-ios-device"
+    ) async throws -> CloudSyncPushResponse {
+        try await post(
+            path: "sync/push",
+            body: CloudSyncPushRequest(userID: userID, deviceID: deviceID, changes: changes)
+        )
+    }
+
+    func loadCloudBackups(userID: String) async throws -> [CloudBackupSnapshot] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("backup/snapshots"), resolvingAgainstBaseURL: false)
+        components?.queryItems = [URLQueryItem(name: "userID", value: userID)]
+        guard let url = components?.url else { throw CloudAPIError.invalidURL }
+        let response: CloudBackupListResponse = try await get(url: url)
+        return response.backups
+    }
+
+    func createCloudBackup(
+        identity: CloudIdentity,
+        snapshot: StorageSnapshot,
+        reason: String
+    ) async throws -> CloudBackupSnapshot {
+        let response: CloudBackupCreateResponse = try await post(
+            path: "backup/snapshots",
+            body: CloudBackupCreateRequest(
+                userID: identity.userID,
+                deviceID: identity.deviceID,
+                reason: reason,
+                snapshot: snapshot
+            )
+        )
+        return response.backup
+    }
+
+    func restoreCloudBackup(identity: CloudIdentity, snapshotID: UUID) async throws -> StorageSnapshot {
+        let response: CloudBackupRestoreResponse = try await post(
+            path: "backup/restore",
+            body: CloudBackupRestoreRequest(userID: identity.userID, snapshotID: snapshotID)
+        )
+        return response.snapshot
+    }
+
+    func syncStoreKitEntitlement(
+        identity: CloudIdentity,
+        transaction: StoreKitTransactionPayload
+    ) async throws -> CloudEntitlementSyncResponse {
+        try await post(
+            path: "entitlements/storekit/sync",
+            body: CloudStoreKitEntitlementRequest(
+                userID: identity.userID,
+                deviceID: identity.deviceID,
+                productID: transaction.productID,
+                transactionID: transaction.transactionID,
+                originalTransactionID: transaction.originalTransactionID,
+                expirationDate: transaction.expirationDate,
+                environment: transaction.environment,
+                signedTransactionJWS: transaction.signedTransactionJWS
+            )
+        )
     }
 
     private func get<T: Decodable>(path: String) async throws -> T {
@@ -118,6 +281,34 @@ struct CloudAPIClient {
         }
         return try Self.decoder.decode(T.self, from: data)
     }
+
+    private func post<Body: Encodable, Response: Decodable>(path: String, body: Body) async throws -> Response {
+        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(body)
+
+        let (data, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw CloudAPIError.invalidResponse
+        }
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            throw CloudAPIError.badStatus(httpResponse.statusCode)
+        }
+        return try Self.decoder.decode(Response.self, from: data)
+    }
+
+    private static let encoder: JSONEncoder = {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return encoder
+    }()
+
+    private static let iso8601Encoder: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()

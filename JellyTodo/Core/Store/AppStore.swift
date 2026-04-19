@@ -9,6 +9,12 @@ final class AppStore: ObservableObject {
     @Published var profile: UserProfile = .default
     @Published var settings: AppSettings = .default
     @Published var entitlement: EntitlementState = .default
+    @Published var cloudIdentity: CloudIdentity?
+    @Published var storeKitEntitlement: StoreKitEntitlementSnapshot = .idle
+    @Published var syncHistory: [SyncHistoryEntry] = []
+    @Published var localBackups: [LocalBackupSnapshot] = []
+    @Published var cloudBackups: [CloudBackupSnapshot] = []
+    @Published var pendingUploadCount: Int = 0
     @Published var timerState = PomodoroTimerState()
 #if DEBUG
     @Published var cloudDebugState = CloudDebugState.idle
@@ -17,17 +23,22 @@ final class AppStore: ObservableObject {
     private let storage: StorageClient
     private let database: DatabaseClient
     private let cloudAPI: CloudAPIClient
+    private let storeKitClient: StoreKitClient
     private var timerCancellable: AnyCancellable?
     private var hasLoadedInitialState = false
+    private var isCloudSyncInFlight = false
+    private let foregroundAutoSyncCooldown: TimeInterval = 15 * 60
 
     init(
         storage: StorageClient = StorageClient(),
         database: DatabaseClient = DatabaseClient(),
-        cloudAPI: CloudAPIClient = CloudAPIClient()
+        cloudAPI: CloudAPIClient = CloudAPIClient(),
+        storeKitClient: StoreKitClient = StoreKitClient()
     ) {
         self.storage = storage
         self.database = database
         self.cloudAPI = cloudAPI
+        self.storeKitClient = storeKitClient
     }
 
     var preferredColorScheme: ColorScheme? {
@@ -96,7 +107,11 @@ final class AppStore: ObservableObject {
                 let database = DatabaseClient()
                 return (
                     snapshot: database.loadSnapshot(legacySnapshot: storage.loadSnapshot()),
-                    entitlement: database.loadEntitlement()
+                    entitlement: database.loadEntitlement(),
+                    cloudIdentity: database.loadCloudIdentity(),
+                    syncHistory: database.loadSyncHistory(),
+                    localBackups: database.loadLocalBackupSnapshots(),
+                    pendingUploadCount: database.pendingChangeLogCount()
                 )
             }.value
 
@@ -106,8 +121,13 @@ final class AppStore: ObservableObject {
             profile = appState.snapshot.profile
             settings = appState.snapshot.settings
             entitlement = appState.entitlement
+            cloudIdentity = appState.cloudIdentity
+            syncHistory = appState.syncHistory
+            localBackups = appState.localBackups
+            pendingUploadCount = appState.pendingUploadCount
             syncGoalIfNeeded()
             savePersistentState()
+            await refreshStoreKitEntitlement()
         }
     }
 
@@ -116,17 +136,17 @@ final class AppStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let now = Date()
-        todos.append(
-            TodoItem(
-                id: UUID(),
-                title: trimmed,
-                isCompleted: false,
-                createdAt: now,
-                updatedAt: now,
-                taskDate: taskDate
-            )
+        let todo = TodoItem(
+            id: UUID(),
+            title: trimmed,
+            isCompleted: false,
+            createdAt: now,
+            updatedAt: now,
+            taskDate: taskDate
         )
+        todos.append(todo)
         saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: todo.id.uuidString, operation: "create", payload: todo)
     }
 
     func addPlanTask(title: String) {
@@ -134,16 +154,16 @@ final class AppStore: ObservableObject {
         guard !trimmed.isEmpty else { return }
 
         let now = Date()
-        planTasks.append(
-            PlanTask(
-                id: UUID(),
-                title: trimmed,
-                createdAt: now,
-                updatedAt: now,
-                isCollapsed: false
-            )
+        let planTask = PlanTask(
+            id: UUID(),
+            title: trimmed,
+            createdAt: now,
+            updatedAt: now,
+            isCollapsed: false
         )
+        planTasks.append(planTask)
         savePlanTasks()
+        logCloudChange(entityType: "plan", entityID: planTask.id.uuidString, operation: "create", payload: planTask)
     }
 
     func addPlanItem(
@@ -158,22 +178,22 @@ final class AppStore: ObservableObject {
         guard planTasks.contains(where: { $0.id == planTaskID }) else { return }
 
         let now = Date()
-        todos.append(
-            TodoItem(
-                id: UUID(),
-                planTaskID: planTaskID,
-                isAddedToToday: false,
-                title: trimmed,
-                isCompleted: false,
-                createdAt: now,
-                updatedAt: now,
-                taskDate: now,
-                cycle: cycle,
-                dailyDurationMinutes: min(max(dailyDurationMinutes, 5), 480),
-                focusTimerDirection: focusTimerDirection
-            )
+        let todo = TodoItem(
+            id: UUID(),
+            planTaskID: planTaskID,
+            isAddedToToday: false,
+            title: trimmed,
+            isCompleted: false,
+            createdAt: now,
+            updatedAt: now,
+            taskDate: now,
+            cycle: cycle,
+            dailyDurationMinutes: min(max(dailyDurationMinutes, 5), 480),
+            focusTimerDirection: focusTimerDirection
         )
+        todos.append(todo)
         saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: todo.id.uuidString, operation: "create", payload: todo)
     }
 
     func togglePlanTaskCollapsed(id: UUID) {
@@ -181,6 +201,7 @@ final class AppStore: ObservableObject {
         planTasks[index].isCollapsed.toggle()
         planTasks[index].updatedAt = Date()
         savePlanTasks()
+        logCloudChange(entityType: "plan", entityID: id.uuidString, operation: "update", payload: planTasks[index])
     }
 
     func addTodoToToday(id: UUID) {
@@ -190,6 +211,7 @@ final class AppStore: ObservableObject {
         todos[index].updatedAt = Date()
         triggerHaptic()
         saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
     }
 
     func updateTodo(id: UUID, title: String) {
@@ -199,6 +221,7 @@ final class AppStore: ObservableObject {
         todos[index].title = trimmed
         todos[index].updatedAt = Date()
         saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
     }
 
     func updateTodoDetail(
@@ -216,11 +239,16 @@ final class AppStore: ObservableObject {
         todos[index].note = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
         todos[index].updatedAt = Date()
         saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
     }
 
     func deleteTodo(id: UUID) {
+        let payload = todos.first(where: { $0.id == id })
         todos.removeAll { $0.id == id }
         saveTodos()
+        if let payload {
+            logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "delete", payload: payload)
+        }
     }
 
     func toggleTodoCompleted(id: UUID) {
@@ -229,6 +257,7 @@ final class AppStore: ObservableObject {
         todos[index].updatedAt = Date()
         triggerHaptic()
         saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
     }
 
     func startPomodoro(
@@ -296,6 +325,7 @@ final class AppStore: ObservableObject {
 
         pomodoroSessions.append(session)
         saveSessions()
+        logCloudChange(entityType: "pomodoro_session", entityID: session.id.uuidString, operation: "create", payload: session)
 
         if timerState.mode == .focus {
             timerState.completedFocusCount += 1
@@ -312,6 +342,7 @@ final class AppStore: ObservableObject {
             saveSettings()
         }
         saveProfile()
+        logCloudChange(entityType: "user_profile", entityID: "current", operation: "update", payload: self.profile)
     }
 
     func updateSettings(_ settings: AppSettings) {
@@ -321,6 +352,300 @@ final class AppStore: ObservableObject {
             saveProfile()
         }
         saveSettings()
+        logCloudChange(entityType: "app_settings", entityID: "current", operation: "update", payload: self.settings)
+    }
+
+    func createLocalBackup(
+        reason: String = "manual",
+        shouldRecordHistory: Bool = true,
+        shouldHaptic: Bool = true
+    ) {
+        let snapshot = currentSnapshot()
+        if let backup = database.createLocalBackup(snapshot: snapshot, reason: reason) {
+            localBackups.insert(backup, at: 0)
+            localBackups = Array(localBackups.prefix(10))
+            if shouldRecordHistory {
+                recordSyncHistory(
+                    direction: .backup,
+                    status: .success,
+                    changedCount: snapshot.todos.count + snapshot.planTasks.count + snapshot.pomodoroSessions.count,
+                    message: "Local backup created"
+                )
+            }
+            if shouldHaptic {
+                triggerHaptic()
+            }
+        } else {
+            if shouldRecordHistory {
+                recordSyncHistory(
+                    direction: .backup,
+                    status: .failed,
+                    message: "Local backup failed"
+                )
+            }
+        }
+    }
+
+    func refreshCloudBackups() async {
+        guard entitlement.isCloudSyncAvailable else {
+            recordSyncHistory(
+                direction: .pull,
+                status: .skipped,
+                message: "Cloud backups require Pro"
+            )
+            return
+        }
+
+        do {
+            let identity = try await resolveCloudIdentity()
+            cloudBackups = try await cloudAPI.loadCloudBackups(userID: identity.userID)
+        } catch {
+            recordSyncHistory(
+                direction: .pull,
+                status: .failed,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func createCloudBackup(reason: String = "manual_cloud_backup") async {
+        createLocalBackup(
+            reason: "before_cloud_backup",
+            shouldRecordHistory: false,
+            shouldHaptic: false
+        )
+
+        guard entitlement.isCloudSyncAvailable else {
+            recordSyncHistory(
+                direction: .backup,
+                status: .skipped,
+                message: "Cloud backups require Pro"
+            )
+            return
+        }
+
+        do {
+            let snapshot = currentSnapshot()
+            let identity = try await resolveCloudIdentity()
+            let backup = try await cloudAPI.createCloudBackup(
+                identity: identity,
+                snapshot: snapshot,
+                reason: reason
+            )
+            cloudBackups.insert(backup, at: 0)
+            cloudBackups = Array(cloudBackups.prefix(20))
+            recordSyncHistory(
+                direction: .backup,
+                status: .success,
+                changedCount: snapshot.todos.count + snapshot.planTasks.count + snapshot.pomodoroSessions.count,
+                message: "Cloud backup created"
+            )
+            triggerHaptic()
+        } catch {
+            recordSyncHistory(
+                direction: .backup,
+                status: .failed,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func restoreCloudBackup(_ backup: CloudBackupSnapshot) async {
+        createLocalBackup(reason: "before_cloud_restore")
+
+        guard entitlement.isCloudSyncAvailable else {
+            recordSyncHistory(
+                direction: .restore,
+                status: .skipped,
+                message: "Cloud restore requires Pro"
+            )
+            return
+        }
+
+        do {
+            let identity = try await resolveCloudIdentity()
+            let snapshot = try await cloudAPI.restoreCloudBackup(identity: identity, snapshotID: backup.id)
+            todos = snapshot.todos
+            planTasks = snapshot.planTasks
+            pomodoroSessions = snapshot.pomodoroSessions
+            profile = snapshot.profile
+            settings = snapshot.settings
+            syncGoalIfNeeded()
+            savePersistentState()
+            database.saveCloudPullCursor(Date())
+
+            recordSyncHistory(
+                direction: .restore,
+                status: .success,
+                changedCount: snapshot.todos.count + snapshot.planTasks.count + snapshot.pomodoroSessions.count,
+                message: "Restored cloud backup"
+            )
+            triggerHaptic()
+        } catch {
+            recordSyncHistory(
+                direction: .restore,
+                status: .failed,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func performManualSync() async {
+        await performCloudSync(
+            reason: "manual_sync_before_merge",
+            shouldRecordBackup: true,
+            shouldRecordNoop: true,
+            shouldHapticOnChange: true
+        )
+    }
+
+    func performForegroundAutoSyncIfNeeded() async {
+        guard hasLoadedInitialState else { return }
+        guard entitlement.isCloudSyncAvailable else {
+            return
+        }
+        guard !isCloudSyncInFlight else { return }
+
+        if let lastAutoSyncAt = database.loadLastForegroundAutoSyncAt(),
+           Date().timeIntervalSince(lastAutoSyncAt) < foregroundAutoSyncCooldown {
+            return
+        }
+
+        database.saveLastForegroundAutoSyncAt(Date())
+        await performCloudSync(
+            reason: "auto_sync_before_merge",
+            shouldRecordBackup: false,
+            shouldRecordNoop: false,
+            shouldHapticOnChange: false
+        )
+    }
+
+    private func performCloudSync(
+        reason: String,
+        shouldRecordBackup: Bool,
+        shouldRecordNoop: Bool,
+        shouldHapticOnChange: Bool
+    ) async {
+        guard !isCloudSyncInFlight else { return }
+
+        createLocalBackup(
+            reason: reason,
+            shouldRecordHistory: shouldRecordBackup,
+            shouldHaptic: shouldHapticOnChange
+        )
+
+        guard entitlement.isCloudSyncAvailable else {
+            if shouldRecordNoop {
+                recordSyncHistory(
+                    direction: .full,
+                    status: .skipped,
+                    message: "Cloud sync is unavailable in Free mode"
+                )
+            }
+            return
+        }
+
+        isCloudSyncInFlight = true
+        defer { isCloudSyncInFlight = false }
+
+        let changes = database.pendingChangeLogs()
+        do {
+            let identity = try await resolveCloudIdentity()
+            var uploadedCount = 0
+            if !changes.isEmpty {
+                let pushResponse = try await cloudAPI.push(
+                    changes: changes,
+                    userID: identity.userID,
+                    deviceID: identity.deviceID
+                )
+                database.markChangeLogsSynced(ids: changes.map(\.id), syncedAt: pushResponse.cursor)
+                uploadedCount = pushResponse.accepted
+            }
+
+            let pullResponse = try await cloudAPI.pull(
+                userID: identity.userID,
+                since: database.loadCloudPullCursor()
+            )
+            let pulledCount = applyCloudSyncPull(pullResponse)
+            database.saveCloudPullCursor(pullResponse.cursor)
+            pendingUploadCount = database.pendingChangeLogCount()
+
+            let totalChangedCount = uploadedCount + pulledCount
+            if totalChangedCount > 0 || shouldRecordNoop {
+                recordSyncHistory(
+                    direction: .full,
+                    status: totalChangedCount == 0 ? .skipped : .success,
+                    changedCount: totalChangedCount,
+                    message: "Uploaded \(uploadedCount), pulled \(pulledCount)"
+                )
+            }
+            if totalChangedCount > 0, shouldHapticOnChange {
+                triggerHaptic()
+            }
+        } catch {
+            pendingUploadCount = database.pendingChangeLogCount()
+            recordSyncHistory(
+                direction: .full,
+                status: .failed,
+                changedCount: changes.count,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    func refreshStoreKitEntitlement() async {
+        storeKitEntitlement = StoreKitEntitlementSnapshot(
+            state: .loading,
+            availableProductIDs: storeKitEntitlement.availableProductIDs,
+            activeProductID: storeKitEntitlement.activeProductID,
+            message: "Checking StoreKit subscription"
+        )
+
+        let snapshot = await storeKitClient.refreshEntitlement()
+        storeKitEntitlement = snapshot
+        await applyStoreKitEntitlement(snapshot)
+    }
+
+    func purchaseProSubscription() async {
+        storeKitEntitlement = StoreKitEntitlementSnapshot(
+            state: .loading,
+            availableProductIDs: storeKitEntitlement.availableProductIDs,
+            activeProductID: storeKitEntitlement.activeProductID,
+            message: "Opening StoreKit purchase"
+        )
+
+        let snapshot = await storeKitClient.purchaseProMonthly()
+        storeKitEntitlement = snapshot
+        await applyStoreKitEntitlement(snapshot)
+    }
+
+    func restoreLocalBackup(_ backup: LocalBackupSnapshot) {
+        createLocalBackup(reason: "before_restore")
+
+        guard let snapshot = database.loadBackupSnapshot(backup) else {
+            recordSyncHistory(
+                direction: .restore,
+                status: .failed,
+                message: "Could not read local backup"
+            )
+            return
+        }
+
+        todos = snapshot.todos
+        planTasks = snapshot.planTasks
+        pomodoroSessions = snapshot.pomodoroSessions
+        profile = snapshot.profile
+        settings = snapshot.settings
+        syncGoalIfNeeded()
+        savePersistentState()
+
+        recordSyncHistory(
+            direction: .restore,
+            status: .success,
+            changedCount: snapshot.todos.count + snapshot.planTasks.count + snapshot.pomodoroSessions.count,
+            message: "Restored local backup"
+        )
+        triggerHaptic()
     }
 
     func stats(for range: PomodoroStatsRange) -> PomodoroStats {
@@ -700,6 +1025,117 @@ final class AppStore: ObservableObject {
         saveSessions()
     }
 
+    private func applyCloudSyncPull(_ response: CloudSyncPullResponse) -> Int {
+        var changedCount = 0
+
+        for cloudPlan in response.plans {
+            if cloudPlan.deletedAt != nil {
+                let beforeCount = planTasks.count
+                planTasks.removeAll { $0.id == cloudPlan.id }
+                if planTasks.count != beforeCount { changedCount += 1 }
+                continue
+            }
+
+            let merged = PlanTask(
+                id: cloudPlan.id,
+                title: cloudPlan.title,
+                createdAt: cloudPlan.createdAt,
+                updatedAt: cloudPlan.updatedAt,
+                isCollapsed: cloudPlan.isCollapsed
+            )
+
+            if let index = planTasks.firstIndex(where: { $0.id == cloudPlan.id }) {
+                guard cloudPlan.updatedAt >= planTasks[index].updatedAt else { continue }
+                if planTasks[index] != merged {
+                    planTasks[index] = merged
+                    changedCount += 1
+                }
+            } else {
+                planTasks.append(merged)
+                changedCount += 1
+            }
+        }
+
+        for cloudTodo in response.todoItems {
+            if cloudTodo.deletedAt != nil {
+                let beforeCount = todos.count
+                todos.removeAll { $0.id == cloudTodo.id }
+                if todos.count != beforeCount { changedCount += 1 }
+                continue
+            }
+
+            let merged = TodoItem(
+                id: cloudTodo.id,
+                planTaskID: cloudTodo.planID,
+                isAddedToToday: cloudTodo.isAddedToToday,
+                title: cloudTodo.title,
+                isCompleted: cloudTodo.isCompleted,
+                createdAt: cloudTodo.createdAt,
+                updatedAt: cloudTodo.updatedAt,
+                taskDate: cloudTodo.taskDate,
+                cycle: cloudTodo.cycle,
+                dailyDurationMinutes: cloudTodo.dailyDurationMinutes,
+                focusTimerDirection: cloudTodo.focusTimerDirection,
+                note: cloudTodo.note
+            )
+
+            if let index = todos.firstIndex(where: { $0.id == cloudTodo.id }) {
+                guard cloudTodo.updatedAt >= todos[index].updatedAt else { continue }
+                if todos[index] != merged {
+                    todos[index] = merged
+                    changedCount += 1
+                }
+            } else {
+                todos.append(merged)
+                changedCount += 1
+            }
+        }
+
+        for cloudSession in response.pomodoroSessions {
+            if cloudSession.deletedAt != nil {
+                let beforeCount = pomodoroSessions.count
+                pomodoroSessions.removeAll { $0.id == cloudSession.id }
+                if pomodoroSessions.count != beforeCount { changedCount += 1 }
+                continue
+            }
+
+            let merged = PomodoroSession(
+                id: cloudSession.id,
+                type: cloudSession.type,
+                startAt: cloudSession.startAt,
+                endAt: cloudSession.endAt,
+                durationSeconds: cloudSession.durationSeconds,
+                relatedTodoID: cloudSession.todoID
+            )
+
+            if !pomodoroSessions.contains(where: { $0.id == cloudSession.id }) {
+                pomodoroSessions.append(merged)
+                changedCount += 1
+            }
+        }
+
+        if let cloudSettings = response.appSettings.max(by: { $0.updatedAt < $1.updatedAt }) {
+            let merged = AppSettings(
+                themeMode: cloudSettings.themeMode,
+                hapticsEnabled: cloudSettings.hapticsEnabled,
+                pomodoroGoalPerDay: cloudSettings.pomodoroGoalPerDay,
+                useLargeText: cloudSettings.useLargeText,
+                language: cloudSettings.language
+            )
+            if settings != merged {
+                settings = merged
+                syncGoalIfNeeded()
+                changedCount += 1
+            }
+        }
+
+        if changedCount > 0 {
+            savePersistentState()
+        }
+
+        return changedCount
+    }
+
     private func clearCloudStagingData() {
         let cloudTodoIDs = Set(todos.filter { Self.isCloudStagingTodo($0) }.map(\.id))
         let cloudPlanIDs = Set(todos.filter { Self.isCloudStagingTodo($0) }.compactMap(\.planTaskID))
@@ -796,14 +1232,7 @@ final class AppStore: ObservableObject {
     }
 
     private func savePersistentState() {
-        let snapshot = StorageSnapshot(
-            todos: todos,
-            planTasks: planTasks,
-            pomodoroSessions: pomodoroSessions,
-            profile: profile,
-            settings: settings
-        )
-        database.saveSnapshot(snapshot)
+        database.saveSnapshot(currentSnapshot())
         database.saveEntitlement(entitlement)
         storage.save(todos, for: .todos)
         storage.save(planTasks, for: .planTasks)
@@ -835,6 +1264,111 @@ final class AppStore: ObservableObject {
     private func saveSettings() {
         database.saveSettings(settings)
         storage.save(settings, for: .appSettings)
+    }
+
+    private func currentSnapshot() -> StorageSnapshot {
+        StorageSnapshot(
+            todos: todos,
+            planTasks: planTasks,
+            pomodoroSessions: pomodoroSessions,
+            profile: profile,
+            settings: settings
+        )
+    }
+
+    private func recordSyncHistory(
+        direction: SyncDirection,
+        status: SyncStatus,
+        changedCount: Int = 0,
+        message: String
+    ) {
+        let entry = SyncHistoryEntry(
+            id: UUID(),
+            direction: direction,
+            status: status,
+            changedCount: changedCount,
+            message: String(message.prefix(160)),
+            createdAt: Date()
+        )
+        syncHistory.insert(entry, at: 0)
+        syncHistory = Array(syncHistory.prefix(20))
+        database.insertSyncHistory(entry)
+    }
+
+    private func applyStoreKitEntitlement(_ snapshot: StoreKitEntitlementSnapshot) async {
+        guard snapshot.state == .active else { return }
+
+        entitlement = EntitlementState(
+            tier: .pro,
+            cloudSyncEnabled: true,
+            expiresAt: nil
+        )
+        database.saveEntitlement(entitlement)
+
+        guard let transaction = snapshot.transaction else { return }
+
+        do {
+            let identity = try await resolveCloudIdentity()
+            let response = try await cloudAPI.syncStoreKitEntitlement(
+                identity: identity,
+                transaction: transaction
+            )
+            recordSyncHistory(
+                direction: .full,
+                status: response.cloudSyncEnabled ? .success : .failed,
+                message: "StoreKit entitlement synced: \(response.source)"
+            )
+        } catch {
+            recordSyncHistory(
+                direction: .full,
+                status: .failed,
+                message: "StoreKit entitlement sync failed: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    private func resolveCloudIdentity() async throws -> CloudIdentity {
+        if let cloudIdentity {
+            return cloudIdentity
+        }
+
+        if let savedIdentity = database.loadCloudIdentity() {
+            cloudIdentity = savedIdentity
+            return savedIdentity
+        }
+
+        let newIdentity = try await cloudAPI.createAnonymousIdentity()
+        cloudIdentity = newIdentity
+        database.saveCloudIdentity(newIdentity)
+        recordSyncHistory(
+            direction: .full,
+            status: .success,
+            message: "Cloud identity created"
+        )
+        return newIdentity
+    }
+
+    private func logCloudChange<T: Codable>(
+        entityType: String,
+        entityID: String,
+        operation: String,
+        payload: T
+    ) {
+        guard entitlement.isCloudSyncAvailable else { return }
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        guard let data = try? encoder.encode(payload),
+              let payloadString = String(data: data, encoding: .utf8)
+        else { return }
+
+        database.appendChangeLog(
+            entityType: entityType,
+            entityID: entityID,
+            operation: operation,
+            payload: payloadString
+        )
+        pendingUploadCount = database.pendingChangeLogCount()
     }
 
     private func triggerHaptic() {

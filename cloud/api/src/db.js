@@ -24,6 +24,15 @@ export async function initSchema() {
       last_seen_at TIMESTAMPTZ NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS cloud_entitlements (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      tier TEXT NOT NULL DEFAULT 'free',
+      cloud_sync_enabled BOOLEAN NOT NULL DEFAULT false,
+      source TEXT NOT NULL DEFAULT 'server',
+      expires_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS plans (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -104,6 +113,18 @@ export async function initSchema() {
       synced_at TIMESTAMPTZ
     );
 
+    CREATE TABLE IF NOT EXISTS backup_snapshots (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      snapshot JSONB NOT NULL,
+      plans_count INTEGER NOT NULL DEFAULT 0,
+      todos_count INTEGER NOT NULL DEFAULT 0,
+      sessions_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE INDEX IF NOT EXISTS idx_plans_user_updated ON plans(user_id, server_updated_at);
     CREATE INDEX IF NOT EXISTS idx_todo_user_updated ON todo_items(user_id, server_updated_at);
     CREATE INDEX IF NOT EXISTS idx_todo_plan_id ON todo_items(plan_id);
@@ -111,6 +132,8 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_pomodoro_user_updated ON pomodoro_sessions(user_id, server_updated_at);
     CREATE INDEX IF NOT EXISTS idx_pomodoro_end_at ON pomodoro_sessions(end_at);
     CREATE INDEX IF NOT EXISTS idx_pomodoro_todo_id ON pomodoro_sessions(todo_id);
+    CREATE INDEX IF NOT EXISTS idx_cloud_entitlements_sync ON cloud_entitlements(user_id, cloud_sync_enabled);
+    CREATE INDEX IF NOT EXISTS idx_backup_snapshots_user_created ON backup_snapshots(user_id, created_at DESC);
   `);
 }
 

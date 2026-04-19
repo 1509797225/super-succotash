@@ -47,6 +47,7 @@ struct JellyTodoApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 #endif
     @StateObject private var store = AppStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -64,6 +65,12 @@ struct JellyTodoApp: App {
                 .background(ThemeTokens.background(for: store.settings.themeMode).ignoresSafeArea())
                 .task {
                     store.loadInitialState()
+                }
+                .onChange(of: scenePhase) { phase in
+                    guard phase == .active else { return }
+                    Task {
+                        await store.performForegroundAutoSyncIfNeeded()
+                    }
                 }
         }
     }

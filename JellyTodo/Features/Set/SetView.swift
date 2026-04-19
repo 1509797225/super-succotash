@@ -92,12 +92,227 @@ private struct ProfileEditorSheet: View {
     }
 }
 
+private struct BackupPointsSheet: View {
+    let backups: [LocalBackupSnapshot]
+    let onRestore: (LocalBackupSnapshot) -> Void
+
+    @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(language == .chinese ? "恢复点" : "Backup Points")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .padding(.top, 10)
+
+                if backups.isEmpty {
+                    emptyState
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(backups) { backup in
+                            backupRow(backup)
+                        }
+                    }
+                }
+
+                CapsuleButton(title: L10n.t(.cancel, language)) {
+                    dismiss()
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(24)
+        }
+        .background(ThemeTokens.background(for: themeMode).ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var emptyState: some View {
+        JellyCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(language == .chinese ? "暂无本地恢复点" : "No local backups")
+                    .font(ThemeTokens.Typography.sectionTitle)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                Text(language == .chinese ? "先点击创建本地恢复点，再从这里回退。" : "Create a local backup first, then restore from here.")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+            }
+            .padding(20)
+        }
+    }
+
+    private func backupRow(_ backup: LocalBackupSnapshot) -> some View {
+        JellyCard {
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(ThemeTokens.accentSoft(for: themeMode))
+                    .frame(width: 42, height: 42)
+                    .overlay(
+                        Image(systemName: "archivebox.fill")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(ThemeTokens.accent(for: themeMode))
+                    )
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(backup.createdAt.formattedShortDateTime())
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    Text("\(backup.reason) · \(backup.todosCount) todo · \(backup.sessionsCount) focus")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    onRestore(backup)
+                    dismiss()
+                } label: {
+                    Text(language == .chinese ? "恢复" : "Restore")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.backgroundPrimary)
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(ThemeTokens.accent(for: themeMode))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+        }
+    }
+}
+
+private struct CloudBackupPointsSheet: View {
+    let backups: [CloudBackupSnapshot]
+    let onRestore: (CloudBackupSnapshot) -> Void
+    let onRefresh: () -> Void
+
+    @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text(language == .chinese ? "云端恢复点" : "Cloud Backups")
+                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    Spacer()
+
+                    Button(action: onRefresh) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(ThemeTokens.accent(for: themeMode))
+                            .frame(width: 42, height: 42)
+                            .background(ThemeTokens.accentSoft(for: themeMode))
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.top, 10)
+
+                if backups.isEmpty {
+                    emptyState
+                } else {
+                    VStack(spacing: 12) {
+                        ForEach(backups) { backup in
+                            backupRow(backup)
+                        }
+                    }
+                }
+
+                CapsuleButton(title: L10n.t(.cancel, language)) {
+                    dismiss()
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(24)
+        }
+        .background(ThemeTokens.background(for: themeMode).ignoresSafeArea())
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var emptyState: some View {
+        JellyCard {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(language == .chinese ? "暂无云端恢复点" : "No cloud backups")
+                    .font(ThemeTokens.Typography.sectionTitle)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                Text(language == .chinese ? "创建云端恢复点后，可以从这里回到某个时间节点。" : "Create a cloud backup, then restore a previous time point here.")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+            }
+            .padding(20)
+        }
+    }
+
+    private func backupRow(_ backup: CloudBackupSnapshot) -> some View {
+        JellyCard {
+            HStack(spacing: 14) {
+                Circle()
+                    .fill(ThemeTokens.accentSoft(for: themeMode))
+                    .frame(width: 42, height: 42)
+                    .overlay(
+                        Image(systemName: "icloud.fill")
+                            .font(.system(size: 17, weight: .bold))
+                            .foregroundStyle(ThemeTokens.accent(for: themeMode))
+                    )
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(backup.createdAt.formattedShortDateTime())
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    Text("\(backup.reason) · \(backup.todosCount) todo · \(backup.sessionsCount) focus")
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    onRestore(backup)
+                    dismiss()
+                } label: {
+                    Text(language == .chinese ? "恢复" : "Restore")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.backgroundPrimary)
+                        .padding(.horizontal, 14)
+                        .frame(height: 34)
+                        .background(ThemeTokens.accent(for: themeMode))
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(16)
+        }
+    }
+}
+
 struct SetView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.appLanguage) private var language
     @State private var showingProfileEditor = false
     @State private var showingThemePicker = false
     @State private var showingLanguagePicker = false
+    @State private var showingBackupPoints = false
+    @State private var showingCloudBackupPoints = false
+    @State private var backupPendingRestore: LocalBackupSnapshot?
+    @State private var cloudBackupPendingRestore: CloudBackupSnapshot?
 
     var body: some View {
         ScrollView {
@@ -114,6 +329,12 @@ struct SetView: View {
 
                 settingsLabel(L10n.t(.preferences, language))
                 baseSettingsGroup
+
+                settingsLabel(backupText(english: "Pro Subscription", chinese: "Pro 订阅"))
+                subscriptionGroup
+
+                settingsLabel(backupText(english: "Backup & Sync", chinese: "备份与同步"))
+                backupSyncGroup
 
                 settingsLabel(L10n.t(.about, language))
                 aboutGroup
@@ -146,6 +367,74 @@ struct SetView: View {
                     store.updateSettings(updated)
                 }
             }
+        }
+        .sheet(isPresented: $showingBackupPoints) {
+            BackupPointsSheet(backups: store.localBackups) { backup in
+                backupPendingRestore = backup
+            }
+        }
+        .sheet(isPresented: $showingCloudBackupPoints) {
+            CloudBackupPointsSheet(
+                backups: store.cloudBackups,
+                onRestore: { backup in
+                    cloudBackupPendingRestore = backup
+                },
+                onRefresh: {
+                    Task {
+                        await store.refreshCloudBackups()
+                    }
+                }
+            )
+        }
+        .confirmationDialog(
+            backupText(english: "Restore Backup?", chinese: "恢复这个备份？"),
+            isPresented: Binding(
+                get: { backupPendingRestore != nil },
+                set: { if !$0 { backupPendingRestore = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(backupText(english: "Restore", chinese: "恢复"), role: .destructive) {
+                if let backup = backupPendingRestore {
+                    store.restoreLocalBackup(backup)
+                    backupPendingRestore = nil
+                }
+            }
+
+            Button(L10n.t(.cancel, language), role: .cancel) {
+                backupPendingRestore = nil
+            }
+        } message: {
+            Text(backupText(
+                english: "A protective backup will be created before restore.",
+                chinese: "恢复前会自动创建一个保护性备份。"
+            ))
+        }
+        .confirmationDialog(
+            backupText(english: "Restore Cloud Backup?", chinese: "恢复这个云端备份？"),
+            isPresented: Binding(
+                get: { cloudBackupPendingRestore != nil },
+                set: { if !$0 { cloudBackupPendingRestore = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(backupText(english: "Restore", chinese: "恢复"), role: .destructive) {
+                if let backup = cloudBackupPendingRestore {
+                    Task {
+                        await store.restoreCloudBackup(backup)
+                    }
+                    cloudBackupPendingRestore = nil
+                }
+            }
+
+            Button(L10n.t(.cancel, language), role: .cancel) {
+                cloudBackupPendingRestore = nil
+            }
+        } message: {
+            Text(backupText(
+                english: "A local protective backup will be created before cloud restore.",
+                chinese: "云端恢复前会自动创建本地保护性备份。"
+            ))
         }
     }
 
@@ -391,6 +680,171 @@ struct SetView: View {
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
+    private var backupSyncGroup: some View {
+        VStack(spacing: 0) {
+            settingLine(
+                icon: "icloud.and.arrow.up.fill",
+                title: backupText(english: "Cloud Sync", chinese: "云同步"),
+                value: cloudSyncValue
+            )
+
+            settingDivider
+
+            settingLine(
+                icon: "person.crop.circle.badge.checkmark",
+                title: backupText(english: "Cloud ID", chinese: "云身份"),
+                value: cloudIdentityValue
+            )
+
+            settingDivider
+
+            Button {
+                Task {
+                    await store.performManualSync()
+                }
+            } label: {
+                settingLine(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: backupText(english: "Sync Now", chinese: "立即同步"),
+                    value: backupText(english: "Safe", chinese: "安全模式"),
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            settingLine(
+                icon: "clock.arrow.circlepath",
+                title: backupText(english: "Last Sync", chinese: "上次同步"),
+                value: lastSyncValue
+            )
+
+            settingDivider
+
+            settingLine(
+                icon: "tray.and.arrow.up.fill",
+                title: backupText(english: "Pending Uploads", chinese: "待上传"),
+                value: "\(store.pendingUploadCount)"
+            )
+
+            settingDivider
+
+            Button {
+                Task {
+                    await store.refreshCloudBackups()
+                    showingCloudBackupPoints = true
+                }
+            } label: {
+                settingLine(
+                    icon: "icloud.fill",
+                    title: backupText(english: "Cloud Backup Points", chinese: "云端恢复点"),
+                    value: "\(store.cloudBackups.count)",
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            Button {
+                Task {
+                    await store.createCloudBackup(reason: "manual_cloud_backup")
+                }
+            } label: {
+                settingLine(
+                    icon: "icloud.and.arrow.up.fill",
+                    title: backupText(english: "Create Cloud Backup", chinese: "创建云端恢复点"),
+                    value: cloudBackupValue,
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            Button {
+                showingBackupPoints = true
+            } label: {
+                settingLine(
+                    icon: "archivebox.fill",
+                    title: backupText(english: "Local Backup Points", chinese: "本地恢复点"),
+                    value: "\(store.localBackups.count)",
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            Button {
+                store.createLocalBackup(reason: "manual_set_backup")
+            } label: {
+                settingLine(
+                    icon: "plus.square.on.square",
+                    title: backupText(english: "Create Local Backup", chinese: "创建本地恢复点"),
+                    value: latestBackupValue,
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            settingLine(
+                icon: "list.bullet.rectangle.fill",
+                title: backupText(english: "Sync History", chinese: "同步记录"),
+                value: latestHistoryValue
+            )
+        }
+        .background(groupBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    private var subscriptionGroup: some View {
+        VStack(spacing: 0) {
+            settingLine(
+                icon: "crown.fill",
+                title: backupText(english: "StoreKit", chinese: "订阅状态"),
+                value: storeKitStatusValue
+            )
+
+            settingDivider
+
+            Button {
+                Task {
+                    await store.refreshStoreKitEntitlement()
+                }
+            } label: {
+                settingLine(
+                    icon: "arrow.clockwise.circle.fill",
+                    title: backupText(english: "Refresh Status", chinese: "刷新订阅状态"),
+                    value: storeKitProductValue,
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            Button {
+                Task {
+                    await store.purchaseProSubscription()
+                }
+            } label: {
+                settingLine(
+                    icon: "sparkle.magnifyingglass",
+                    title: backupText(english: "Try Pro Purchase", chinese: "尝试购买 Pro"),
+                    value: backupText(english: "Sandbox", chinese: "沙盒"),
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+        }
+        .background(groupBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
     private var aboutGroup: some View {
         VStack(spacing: 0) {
             settingLine(icon: "sparkles", title: L10n.t(.designConcept, language), value: L10n.t(.bigJelly, language))
@@ -403,6 +857,84 @@ struct SetView: View {
 
     private var settingFont: Font {
         .system(size: 18, weight: .bold, design: .rounded)
+    }
+
+    private var cloudSyncValue: String {
+        if store.entitlement.isCloudSyncAvailable {
+            return backupText(english: "Pro On", chinese: "Pro 已开启")
+        }
+
+        if store.entitlement.tier == .pro {
+            return backupText(english: "Pro Off", chinese: "Pro 未开启")
+        }
+
+        return backupText(english: "Free Local", chinese: "Free 本地")
+    }
+
+    private var cloudIdentityValue: String {
+        guard let identity = store.cloudIdentity else {
+            return backupText(english: "Not Created", chinese: "未创建")
+        }
+        return identity.shortUserID
+    }
+
+    private var storeKitStatusValue: String {
+        switch store.storeKitEntitlement.state {
+        case .active:
+            return backupText(english: "Active", chinese: "已激活")
+        case .loading:
+            return backupText(english: "Checking", chinese: "检查中")
+        case .productsUnavailable:
+            return backupText(english: "No Product", chinese: "商品未配置")
+        case .pending:
+            return backupText(english: "Pending", chinese: "待处理")
+        case .failed:
+            return backupText(english: "Failed", chinese: "失败")
+        case .notSubscribed:
+            return backupText(english: "Free", chinese: "未订阅")
+        case .idle:
+            return backupText(english: "Not Loaded", chinese: "未加载")
+        }
+    }
+
+    private var storeKitProductValue: String {
+        if let activeProductID = store.storeKitEntitlement.activeProductID {
+            return String(activeProductID.prefix(18))
+        }
+
+        guard !store.storeKitEntitlement.availableProductIDs.isEmpty else {
+            return backupText(english: "Product", chinese: "商品")
+        }
+
+        return "\(store.storeKitEntitlement.availableProductIDs.count)"
+    }
+
+    private var lastSyncValue: String {
+        guard let entry = store.syncHistory.first(where: { $0.direction != .backup }) else {
+            return backupText(english: "Never", chinese: "暂无")
+        }
+        return entry.createdAt.formattedShortDateTime()
+    }
+
+    private var latestBackupValue: String {
+        guard let backup = store.localBackups.first else {
+            return backupText(english: "Now", chinese: "现在")
+        }
+        return backup.createdAt.formattedShortDateTime()
+    }
+
+    private var cloudBackupValue: String {
+        guard let backup = store.cloudBackups.first else {
+            return backupText(english: "Cloud", chinese: "云端")
+        }
+        return backup.createdAt.formattedShortDateTime()
+    }
+
+    private var latestHistoryValue: String {
+        guard let entry = store.syncHistory.first else {
+            return backupText(english: "Empty", chinese: "暂无")
+        }
+        return "\(entry.direction.title) · \(entry.status.title)"
     }
 
     private var settingDivider: some View {
@@ -477,6 +1009,10 @@ struct SetView: View {
         let trimmed = store.profile.nickname.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "JT" : String(trimmed.prefix(2)).uppercased()
     }
+
+    private func backupText(english: String, chinese: String) -> String {
+        language == .chinese ? chinese : english
+    }
 }
 
 private extension View {
@@ -485,4 +1021,18 @@ private extension View {
             .padding(.horizontal, 14)
             .frame(height: 58)
     }
+}
+
+private extension Date {
+    func formattedShortDateTime() -> String {
+        DateFormatter.setShortDateTime.string(from: self)
+    }
+}
+
+private extension DateFormatter {
+    static let setShortDateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MM-dd HH:mm"
+        return formatter
+    }()
 }

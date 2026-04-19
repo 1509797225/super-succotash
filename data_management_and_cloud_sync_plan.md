@@ -14,21 +14,21 @@
 
 当前 App 使用：
 
-- 本地存储：SQLite 第一阶段 + `UserDefaults + Codable` 回滚备份
+- 本地存储：SQLite 第一阶段 + `UserDefaults + Codable` 回滚备份 + 本地恢复点
 - 状态入口：`AppStore`
 - 数据范围：Plan、Today、TodoItem、PomodoroSession、UserProfile、AppSettings、调试插桩数据
-- 云端能力：staging API 已部署，端侧 Debug 入口支持健康检查和只读拉取云测数据
+- 云端能力：staging API 已部署，端侧 Debug 入口支持健康检查、只读拉取云测数据，Set 页支持 Pro/mock Pro 手动同步、云端备份点创建、云端恢复点列表和显式恢复
 - 账号体系：暂无
-- 订阅体系：暂无，后续按 Free 本地版 / Pro 云同步版设计
+- 订阅体系：端侧已接入 StoreKit 2 骨架，服务端已建立 `cloud_entitlements` 权益闸口和 staging 交易同步接口；staging 匿名身份当前自动授予 Pro 同步资格，便于联调
 
-当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，但仍未完成 Repository、change_logs 和正式同步闭环。
+当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，并完成 `change_logs`、本地恢复点、云端备份点、Set 页 `Backup & Sync` 入口、StoreKit 2 端侧骨架、StoreKit staging 交易同步、匿名云身份、服务端权益闸口、staging 手动 push、基础 pull merge 和安全版前台自动同步。正式生产级同步仍未完成，因为还缺 App Store Server API 级交易验签、多设备冲突策略和云端恢复后的“设为新基线”策略。
 
 主要风险：
 
 - 第一阶段 SQLite 仍采用整表替换保存，尚未充分利用增量 SQL 写入。
 - 尚未建立 Repository 层，页面状态和持久化边界还可以继续拆清楚。
-- 尚未写入 `change_logs`，不能直接做正式增量同步。
-- 不方便做云同步冲突处理。
+- `change_logs` 已写入并可手动 push，手动同步后会按 cursor 拉取云端增量。
+- 当前 pull merge 是基础版 last-write-wins，冲突处理、云端恢复后的新基线上传策略和 App Store Server API 级交易验签仍未完成。
 - 数据结构变化后仍需要更系统的迁移版本管理。
 
 ## 3. 目标架构
@@ -58,6 +58,7 @@ PostgreSQL
 - iOS App 不直接连接云数据库，只通过 HTTPS API 访问后端服务。
 - 删除操作默认软删除，避免云同步时丢失删除事件。
 - 未获得云同步权益时，不上传用户个人数据。
+- 正式同步必须可解释、可手动触发、可回退；任何自动拉取都不得静默覆盖用户真实本地数据。
 
 ## 3.1 订阅与数据边界
 
@@ -76,6 +77,7 @@ PostgreSQL
 - 用户从 Free 升级 Pro 后，应把当前本地 SQLite 数据作为初始基线上传云端。
 - 用户从 Pro 过期回到 Free 后，本机已有数据继续可用，但暂停上传、下载和多设备同步。
 - 订阅权益必须和账号或匿名云身份绑定；正式生产不可只相信本地开关。
+- Pro 用户必须能在 Set 页看到同步状态、手动触发同步、查看同步历史，并在必要时回到本地恢复点。
 
 ## 4. 本地数据库方案
 
@@ -208,6 +210,46 @@ CREATE TABLE sync_state (
 );
 ```
 
+#### sync_history
+
+```sql
+CREATE TABLE sync_history (
+  id TEXT PRIMARY KEY,
+  direction TEXT NOT NULL,
+  status TEXT NOT NULL,
+  changed_count INTEGER NOT NULL DEFAULT 0,
+  message TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL
+);
+```
+
+说明：
+
+- `direction` 固定为 `push / pull / full / restore`。
+- `status` 固定为 `success / failed / skipped`。
+- 用于 Set 页展示最近同步记录，帮助用户知道数据什么时候上传、什么时候拉取、是否失败。
+
+#### local_backup_snapshots
+
+```sql
+CREATE TABLE local_backup_snapshots (
+  id TEXT PRIMARY KEY,
+  reason TEXT NOT NULL,
+  snapshot_path TEXT NOT NULL,
+  plans_count INTEGER NOT NULL DEFAULT 0,
+  todos_count INTEGER NOT NULL DEFAULT 0,
+  sessions_count INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+```
+
+说明：
+
+- 每次手动同步、恢复前、重要自动 merge 前，先创建本地恢复点。
+- `snapshot_path` 指向 App 沙盒内的 JSON 快照文件，不建议把完整快照直接塞进主表。
+- Free 用户也可使用本地恢复点，但卸载 App 后随沙盒删除。
+- Pro 用户可把当前本地快照同步到云端，形成云端备份点。
+
 #### entitlement_state
 
 ```sql
@@ -235,6 +277,8 @@ CREATE INDEX idx_todo_items_today ON todo_items(is_added_to_today, task_date);
 CREATE INDEX idx_pomodoro_sessions_end_at ON pomodoro_sessions(end_at);
 CREATE INDEX idx_pomodoro_sessions_todo_id ON pomodoro_sessions(todo_id);
 CREATE INDEX idx_change_logs_synced_at ON change_logs(synced_at);
+CREATE INDEX idx_sync_history_created_at ON sync_history(created_at);
+CREATE INDEX idx_backup_snapshots_created_at ON local_backup_snapshots(created_at);
 ```
 
 ### 4.4 删除策略
@@ -295,7 +339,7 @@ Core
 
 - 所有新增、编辑、删除、完成状态变化，都写入 `change_logs`。
 - 为未来云同步做准备。
-- 本阶段仍不连接云端。
+- 已在 Pro/mock Pro 下写入本地同步队列；Free 只保留本地数据，不写上传队列。
 
 ### Phase D：接入云端同步
 
@@ -305,18 +349,37 @@ Core
 - 增加登录或匿名账号策略。
 - 上传本地未同步 change_logs。
 - 拉取云端增量变更并合并到本地 SQLite。
+- Set 页新增 `Backup & Sync` 模块，先支持手动同步、同步状态、同步历史和本地恢复点。
+- 自动同步必须在手动同步稳定后再开启，且必须先创建可回退恢复点。
 
-### Phase C.5：端侧云测只读接入
+当前状态：
 
-当前先接一个低风险调试入口，不进入正式同步闭环：
+- 已完成 staging `POST /sync/push`。
+- 已完成端侧 `Sync Now` 手动上传未同步 `change_logs`。
+- 已完成上传成功后标记本地变更为 synced。
+- 已完成端侧基础 `GET /sync/pull?since=cursor` 合并，支持 Plan、Todo、PomodoroSession、AppSettings 增量回流。
+- 已完成端侧匿名云身份创建和本地持久化；首次 Pro/mock Pro 手动同步时会调用 `POST /auth/anonymous`，后续复用同一 userID/deviceID。
+- 已完成服务端 `cloud_entitlements` 权益表和 `push/pull` 闸口；当前 staging 通过 `STAGING_AUTO_GRANT_PRO` 自动给匿名用户 Pro 同步资格。
+- 已完成 StoreKit 2 端侧骨架：订阅商品 ID、商品加载、当前订阅检测、购买入口和 Set 页订阅状态展示。
+- 已完成 staging `POST /entitlements/storekit/sync`，端侧检测到 StoreKit verified transaction 后可把交易摘要同步到服务端并更新 `cloud_entitlements`。
+- 已完成安全版前台自动同步：App 回到前台、Pro 可用、超过 15 分钟冷却且无同步并发时，自动执行一次增量 push + pull；失败只写同步记录，不打断本地使用。
+- 已完成同步历史、本地恢复点和恢复前保护备份。
+- 已完成云端备份点一期：服务端 `backup_snapshots` 表、`POST /backup/snapshots`、`GET /backup/snapshots`、`POST /backup/restore`，端侧 Set 页可创建云端恢复点、查看云端恢复点并显式恢复。
+- 未完成正式账号登录、App Store Server API 级交易验签、多设备冲突处理和云端恢复后的新基线上传策略。
+
+### Phase C.5：端侧云测与手动同步接入
+
+当前先接一个低风险调试、手动同步和前台自动同步入口，不进入复杂后台同步闭环：
 
 - 新增 `CloudAPIClient`，默认指向 staging：`http://101.43.104.105`。
 - Debug 浮层支持 `GET /health`，用于真机和模拟器连云验证。
 - Debug 浮层支持 `GET /sync/pull`，只拉取 `debug-user-staging` 云测数据。
+- Set 页 `Backup & Sync` 支持手动 `Sync Now`，上传 Pro/mock Pro 下积累的本地 `change_logs`。
+- 服务端 `POST /sync/push` 已支持 Plan、Todo、PomodoroSession、AppSettings 的 staging merge，并写入 `sync_logs`。
 - Debug 浮层支持查看本地数据库摘要，并手动 mock `Free / Pro`；mock 结果会写入 SQLite 的 `entitlement_state`。
 - 拉取的云测数据写入现有 `UserDefaults + Codable` 本地结构，并带 `debug-cloud-staging-seed` 标记。
 - 重复拉取前先清理旧云测数据，不覆盖用户真实数据。
-- 本阶段不实现 `POST /sync/push`，不处理冲突合并，不接正式账号体系。
+- 本阶段不处理正式冲突合并，不接正式账号体系，不开启复杂后台同步。
 - 因 staging 暂未配置 HTTPS，端侧临时允许 HTTP；正式生产必须切换 HTTPS 并收紧 ATS。
 
 ## 6. 云端方案
@@ -360,6 +423,7 @@ todo_items
 pomodoro_sessions
 app_settings
 sync_logs
+backup_snapshots
 ```
 
 所有业务表建议增加：
@@ -373,12 +437,37 @@ deleted_at
 version
 ```
 
+#### backup_snapshots
+
+```sql
+CREATE TABLE backup_snapshots (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+  reason TEXT NOT NULL DEFAULT '',
+  snapshot JSONB NOT NULL,
+  plans_count INTEGER NOT NULL DEFAULT 0,
+  todos_count INTEGER NOT NULL DEFAULT 0,
+  sessions_count INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+说明：
+
+- `snapshot` 复用端侧 `StorageSnapshot` JSON 格式。
+- 列表接口只返回 metadata，不返回完整快照，避免 Set 页打开时传输过大。
+- 恢复接口只取回快照，由端侧先创建本地保护性恢复点，再应用到本地 SQLite。
+
 ### 6.3 API 草案
 
 ```text
 POST /auth/anonymous
 POST /sync/push
 GET  /sync/pull?since=cursor
+POST /backup/snapshots
+GET  /backup/snapshots
+POST /backup/restore
 POST /debug/seed
 POST /debug/reset
 GET  /health
@@ -386,9 +475,12 @@ GET  /health
 
 说明：
 
-- `POST /auth/anonymous`：第一阶段可用匿名账号或设备账号，不急着做完整注册登录。
-- `POST /sync/push`：上传本地 change_logs。
+- `POST /auth/anonymous`：第一阶段已用于创建端侧匿名云身份，并持久化到本地 SQLite `meta`。
+- `POST /sync/push`：上传本地 change_logs；staging 已落地，当前用于手动 push。
 - `GET /sync/pull`：根据 cursor 拉取云端变更。
+- `POST /backup/snapshots`：Pro 用户创建云端备份点；staging 已落地。
+- `GET /backup/snapshots`：Pro 用户查看自己的云端备份点列表；staging 已落地。
+- `POST /backup/restore`：Pro 用户显式选择某个云端备份点并取回快照，端侧负责应用恢复；staging 已落地。
 - `POST /debug/seed`：生成云测数据。
 - `POST /debug/reset`：重置 staging 测试数据。
 - `GET /health`：云端健康检查。
@@ -419,6 +511,88 @@ Async Sync
 - 删除冲突：`deleted_at` 优先级最高。
 - PomodoroSession：默认不可变记录，只追加，不覆盖。
 - Settings：以最后更新时间为准。
+- 正式拉取远端数据前必须先创建本地恢复点；如果合并结果异常，用户可手动回退。
+- 自动同步不得直接把远端完整快照覆盖本地库，只能按增量变更合并。
+
+### 7.3 备份与云数据管理
+
+Set 页必须新增独立模块：
+
+```text
+Backup & Sync
+```
+
+模块职责：
+
+- 展示当前数据模式：`Free Local Only` / `Pro Cloud Sync` / `Debug Pro Mock`。
+- 展示云同步状态：是否开启、上次同步时间、待上传数量、最近失败原因。
+- 提供 `Sync Now` 手动同步入口。
+- 提供 `Create Local Backup` 手动创建本地恢复点。
+- 提供 `Backup Points` 恢复点列表，支持按时间点回退。
+- 提供 `Sync History` 同步历史，展示最近 push / pull / restore 记录。
+- Pro 用户展示云端备份状态；Free 用户展示升级提示，但不得上传个人数据。
+
+第一版 UI 建议：
+
+```text
+Set
+└── Backup & Sync
+    ├── Cloud Sync       Pro / Off / Debug
+    ├── Sync Now         手动同步
+    ├── Last Sync        2026-04-19 20:30
+    ├── Pending Uploads  12
+    ├── Backup Points    5
+    └── Sync History     最近 20 条
+```
+
+手动同步流程：
+
+```text
+User taps Sync Now
+  ↓
+Create local_backup_snapshot(reason: manual_sync_before_merge)
+  ↓
+Push unsynced change_logs
+  ↓
+Pull remote changes since last_pull_cursor
+  ↓
+Merge into SQLite transaction
+  ↓
+Write sync_history(success / failed)
+  ↓
+Update sync_state
+```
+
+自动同步触发条件：
+
+- App 进入前台时，如果 Pro 且距离上次同步超过固定冷却时间，可尝试同步。
+- App 进入后台前，如果存在未上传 change_logs，可尝试快速上传。
+- 网络恢复时，如果存在未上传 change_logs，可排队同步。
+- 用户完成关键操作后只写 change_logs，不立即每次都打网络请求，避免频繁请求和耗电。
+
+自动同步安全限制：
+
+- 自动同步只允许处理增量，不允许远端整库覆盖本地。
+- 自动 pull 合并前必须创建本地恢复点，或至少在本次事务中保留可回滚快照。
+- 如果本地有未同步变更且远端同实体也有变更，必须走冲突规则，不得静默丢弃本地变更。
+- 自动同步失败不能影响本地使用，失败原因写入 `sync_history`。
+- Free 或 Pro 过期状态下不得上传用户个人数据。
+
+恢复点规则：
+
+- 本地恢复点保存 App 沙盒内的 JSON 快照或 SQLite 导出快照。
+- 手动同步前、手动恢复前、云端大批量拉取前必须创建恢复点。
+- 默认保留最近 10 个本地恢复点，超过数量可清理最旧记录。
+- 用户手动创建的恢复点默认不自动清理，除非用户主动删除。
+- 恢复操作本身也要写入 `sync_history(direction: restore)`。
+
+云端备份点规则：
+
+- 仅 Pro 用户可使用云端备份点。
+- 云端备份点按 `user_id` 隔离，设备只作为来源标记。
+- 恢复云端备份前必须先创建本地恢复点。
+- 云端恢复是用户显式操作，不允许 App 自动选择历史节点覆盖当前数据。
+- 当前一期云端恢复会把所选快照应用到本地，并保存新的本地快照；后续需要补充“恢复后是否上传为云端新基线”的显式策略，避免多设备同步把旧云端数据重新覆盖回来。
 
 ### 7.4 订阅同步闸口
 
@@ -452,7 +626,7 @@ if entitlement.cloudSyncEnabled {
 - Pro 过期后不删除云端历史数据，但端侧暂停同步；恢复订阅后再继续拉取和上传。
 - Debug 云测拉取不等于正式同步，不受订阅逻辑约束，但必须仅在 Debug 或 staging 环境开启。
 
-### 7.3 同步游标
+### 7.5 同步游标
 
 本地维护：
 
@@ -460,6 +634,8 @@ if entitlement.cloudSyncEnabled {
 sync_state.last_pull_cursor
 sync_state.last_push_at
 sync_state.device_id
+sync_state.last_backup_at
+sync_state.pending_upload_count
 ```
 
 云端返回：
@@ -623,10 +799,13 @@ volumes:
 1. 保持当前 SQLite 第一阶段稳定，继续打磨 UI 和核心体验。
 2. 把整表替换保存逐步改为 Repository 增量写入。
 3. 继续扩展 `entitlement_state`，当前已支持本地 mock 区分 Free / Pro 行为。
-4. 引入 `change_logs` 写入逻辑，但只在 Pro/mock Pro 下写入同步队列。
-5. 在云服务器继续维护 `jellytodo-staging`。
-6. 做匿名账号和单设备同步闭环。
-7. 接 StoreKit 2 和服务端权益校验。
-8. 再做多设备同步、冲突处理和正式账号体系。
+4. 继续维护 `jellytodo-staging`，当前已支持健康检查、云测拉取和手动 push。
+5. 强化云端 pull merge，把当前基础 last-write-wins 升级为可解释的冲突策略。
+6. 明确“云端恢复后是否设为新基线”的用户操作和上传策略。
+7. 在 App Store Connect 创建订阅商品，当前端侧占位 Product ID 为 `jellytodo.pro.monthly`。
+8. 把当前 staging client-verified 交易同步升级为 App Store Server API / JWS 级验签，再写入 `cloud_entitlements`。
+9. 关闭 staging 自动授权，确保生产环境只有服务端确认 Pro 后才能同步个人数据。
+10. 在前台自动同步稳定后，再考虑网络恢复和低频后台触发。
+11. 再做多设备同步、冲突处理和正式账号体系。
 
-当前不建议直接做云同步代码，因为本地数据层还没有稳定表结构。先完成本地 SQLite 迁移，会让后续上云简单很多。
+当前不建议直接开启复杂后台同步。先把手动同步和前台自动同步在真机上跑稳定，再考虑网络恢复和低频后台触发，会更安全。

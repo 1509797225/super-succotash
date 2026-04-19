@@ -411,6 +411,160 @@ struct EntitlementState: Codable, Equatable {
     )
 }
 
+struct CloudIdentity: Codable, Equatable {
+    let userID: String
+    let deviceID: String
+    let createdAt: Date
+
+    var shortUserID: String {
+        String(userID.prefix(8))
+    }
+}
+
+enum StoreKitSubscriptionState: String, Codable, CaseIterable {
+    case idle
+    case loading
+    case active
+    case notSubscribed
+    case productsUnavailable
+    case pending
+    case failed
+
+    var title: String {
+        switch self {
+        case .idle:
+            return "Idle"
+        case .loading:
+            return "Loading"
+        case .active:
+            return "Active"
+        case .notSubscribed:
+            return "Not Subscribed"
+        case .productsUnavailable:
+            return "Products Unavailable"
+        case .pending:
+            return "Pending"
+        case .failed:
+            return "Failed"
+        }
+    }
+}
+
+struct StoreKitEntitlementSnapshot: Codable, Equatable {
+    let state: StoreKitSubscriptionState
+    let availableProductIDs: [String]
+    let activeProductID: String?
+    let transaction: StoreKitTransactionPayload?
+    let message: String
+
+    init(
+        state: StoreKitSubscriptionState,
+        availableProductIDs: [String],
+        activeProductID: String?,
+        transaction: StoreKitTransactionPayload? = nil,
+        message: String
+    ) {
+        self.state = state
+        self.availableProductIDs = availableProductIDs
+        self.activeProductID = activeProductID
+        self.transaction = transaction
+        self.message = message
+    }
+
+    static let idle = StoreKitEntitlementSnapshot(
+        state: .idle,
+        availableProductIDs: [],
+        activeProductID: nil,
+        message: "StoreKit has not loaded yet"
+    )
+}
+
+struct StoreKitTransactionPayload: Codable, Equatable {
+    let productID: String
+    let transactionID: String
+    let originalTransactionID: String
+    let expirationDate: Date?
+    let environment: String
+    let signedTransactionJWS: String
+}
+
+enum SyncDirection: String, Codable, CaseIterable {
+    case push
+    case pull
+    case full
+    case restore
+    case backup
+
+    var title: String {
+        switch self {
+        case .push:
+            return "Push"
+        case .pull:
+            return "Pull"
+        case .full:
+            return "Full"
+        case .restore:
+            return "Restore"
+        case .backup:
+            return "Backup"
+        }
+    }
+}
+
+enum SyncStatus: String, Codable, CaseIterable {
+    case success
+    case failed
+    case skipped
+
+    var title: String {
+        switch self {
+        case .success:
+            return "Success"
+        case .failed:
+            return "Failed"
+        case .skipped:
+            return "Skipped"
+        }
+    }
+}
+
+struct SyncHistoryEntry: Identifiable, Codable, Equatable {
+    let id: UUID
+    let direction: SyncDirection
+    let status: SyncStatus
+    let changedCount: Int
+    let message: String
+    let createdAt: Date
+}
+
+struct LocalBackupSnapshot: Identifiable, Codable, Equatable {
+    let id: UUID
+    let reason: String
+    let snapshotPath: String
+    let plansCount: Int
+    let todosCount: Int
+    let sessionsCount: Int
+    let createdAt: Date
+}
+
+struct CloudBackupSnapshot: Identifiable, Codable, Equatable {
+    let id: UUID
+    let reason: String
+    let plansCount: Int
+    let todosCount: Int
+    let sessionsCount: Int
+    let createdAt: Date
+}
+
+struct ChangeLogEntry: Identifiable, Codable, Equatable {
+    let id: UUID
+    let entityType: String
+    let entityID: String
+    let operation: String
+    let payload: String
+    let createdAt: Date
+}
+
 enum PomodoroStatsRange: String, CaseIterable, Identifiable {
     case today
     case week
