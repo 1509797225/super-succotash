@@ -8,14 +8,26 @@ final class AppStore: ObservableObject {
     @Published var pomodoroSessions: [PomodoroSession] = []
     @Published var profile: UserProfile = .default
     @Published var settings: AppSettings = .default
+    @Published var entitlement: EntitlementState = .default
     @Published var timerState = PomodoroTimerState()
+#if DEBUG
+    @Published var cloudDebugState = CloudDebugState.idle
+#endif
 
     private let storage: StorageClient
+    private let database: DatabaseClient
+    private let cloudAPI: CloudAPIClient
     private var timerCancellable: AnyCancellable?
     private var hasLoadedInitialState = false
 
-    init(storage: StorageClient = StorageClient()) {
+    init(
+        storage: StorageClient = StorageClient(),
+        database: DatabaseClient = DatabaseClient(),
+        cloudAPI: CloudAPIClient = CloudAPIClient()
+    ) {
         self.storage = storage
+        self.database = database
+        self.cloudAPI = cloudAPI
     }
 
     var preferredColorScheme: ColorScheme? {
@@ -79,15 +91,21 @@ final class AppStore: ObservableObject {
         hasLoadedInitialState = true
 
         Task {
-            let snapshot = await Task.detached(priority: .userInitiated) {
-                StorageClient().loadSnapshot()
+            let appState = await Task.detached(priority: .userInitiated) {
+                let storage = StorageClient()
+                let database = DatabaseClient()
+                return (
+                    snapshot: database.loadSnapshot(legacySnapshot: storage.loadSnapshot()),
+                    entitlement: database.loadEntitlement()
+                )
             }.value
 
-            todos = snapshot.todos
-            planTasks = snapshot.planTasks
-            pomodoroSessions = snapshot.pomodoroSessions
-            profile = snapshot.profile
-            settings = snapshot.settings
+            todos = appState.snapshot.todos
+            planTasks = appState.snapshot.planTasks
+            pomodoroSessions = appState.snapshot.pomodoroSessions
+            profile = appState.snapshot.profile
+            settings = appState.snapshot.settings
+            entitlement = appState.entitlement
             syncGoalIfNeeded()
             savePersistentState()
         }
@@ -428,6 +446,51 @@ final class AppStore: ObservableObject {
     }
 
 #if DEBUG
+    var databaseDebugSummary: DatabaseDebugSummary {
+        DatabaseDebugSummary(
+            plans: planTasks.count,
+            todos: todos.count,
+            todayTodos: todayTodos.count,
+            sessions: pomodoroSessions.count,
+            entitlement: entitlement
+        )
+    }
+
+    func mockEntitlement(_ tier: EntitlementTier) {
+        entitlement = EntitlementState(
+            tier: tier,
+            cloudSyncEnabled: tier == .pro,
+            expiresAt: tier == .pro ? Calendar.current.date(byAdding: .month, value: 1, to: Date()) : nil
+        )
+        database.saveEntitlement(entitlement)
+        triggerHaptic()
+    }
+
+    func checkCloudHealth() async {
+        cloudDebugState = .loading("Checking cloud...")
+
+        do {
+            let health = try await cloudAPI.health()
+            cloudDebugState = .success("Cloud OK · \(health.environment)")
+            triggerHaptic()
+        } catch {
+            cloudDebugState = .failure(error.localizedDescription)
+        }
+    }
+
+    func importCloudStagingData() async {
+        cloudDebugState = .loading("Pulling staging data...")
+
+        do {
+            let response = try await cloudAPI.pull()
+            replaceCloudStagingData(with: response)
+            cloudDebugState = .success("Pulled \(response.plans.count) plans · \(response.todoItems.count) todos · \(response.pomodoroSessions.count) sessions")
+            triggerHaptic()
+        } catch {
+            cloudDebugState = .failure(error.localizedDescription)
+        }
+    }
+
     func seedPomodoroChartDebugData() {
         seedDebugData(planCount: 6, itemsPerPlan: 4, sessionsPerTodo: 2, todayItemsPerPlan: 3)
     }
@@ -539,13 +602,13 @@ final class AppStore: ObservableObject {
     }
 
     func clearPomodoroChartDebugData() {
-        let debugTodoIDs = Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.map(\.id))
-        let debugPlanIDs = Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.compactMap(\.planTaskID))
+        let debugTodoIDs = Set(todos.filter { Self.isDebugSeedTodo($0) }.map(\.id))
+        let debugPlanIDs = Set(todos.filter { Self.isDebugSeedTodo($0) }.compactMap(\.planTaskID))
 
         pomodoroSessions.removeAll { session in
             session.relatedTodoID.map { debugTodoIDs.contains($0) } ?? false
         }
-        todos.removeAll { $0.note == Self.debugPomodoroSeedMarker }
+        todos.removeAll { Self.isDebugSeedTodo($0) }
         planTasks.removeAll { debugPlanIDs.contains($0.id) }
 
         saveSessions()
@@ -555,9 +618,9 @@ final class AppStore: ObservableObject {
     }
 
     var debugPomodoroSeedSummary: (plans: Int, todos: Int, todayTodos: Int, sessions: Int, todaySeconds: Int) {
-        let debugTodoIDs = Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.map(\.id))
+        let debugTodoIDs = Set(todos.filter { Self.isDebugSeedTodo($0) }.map(\.id))
         let debugTodayTodos = todos.filter {
-            $0.note == Self.debugPomodoroSeedMarker
+            Self.isDebugSeedTodo($0)
                 && $0.isAddedToToday
                 && Calendar.current.isDateInToday($0.taskDate)
         }.count
@@ -569,7 +632,7 @@ final class AppStore: ObservableObject {
             .reduce(0) { $0 + $1.durationSeconds }
 
         return (
-            plans: Set(todos.filter { $0.note == Self.debugPomodoroSeedMarker }.compactMap(\.planTaskID)).count,
+            plans: Set(todos.filter { Self.isDebugSeedTodo($0) }.compactMap(\.planTaskID)).count,
             todos: debugTodoIDs.count,
             todayTodos: debugTodayTodos,
             sessions: sessions.count,
@@ -577,7 +640,87 @@ final class AppStore: ObservableObject {
         )
     }
 
+    private func replaceCloudStagingData(with response: CloudSyncPullResponse) {
+        clearCloudStagingData()
+
+        let cloudPlans = response.plans
+            .filter { $0.deletedAt == nil }
+            .map {
+                PlanTask(
+                    id: $0.id,
+                    title: $0.title,
+                    createdAt: $0.createdAt,
+                    updatedAt: $0.updatedAt,
+                    isCollapsed: $0.isCollapsed
+                )
+            }
+
+        let cloudTodos = response.todoItems
+            .filter { $0.deletedAt == nil }
+            .map {
+                TodoItem(
+                    id: $0.id,
+                    planTaskID: $0.planID,
+                    isAddedToToday: $0.isAddedToToday,
+                    title: $0.title,
+                    isCompleted: $0.isCompleted,
+                    createdAt: $0.createdAt,
+                    updatedAt: $0.updatedAt,
+                    taskDate: $0.taskDate,
+                    cycle: $0.cycle,
+                    dailyDurationMinutes: $0.dailyDurationMinutes,
+                    focusTimerDirection: $0.focusTimerDirection,
+                    note: "\(Self.cloudStagingSeedMarker)\n\($0.note)"
+                )
+            }
+
+        let availableTodoIDs = Set(cloudTodos.map(\.id))
+        let cloudSessions = response.pomodoroSessions
+            .filter { session in
+                session.deletedAt == nil
+                    && session.todoID.map { availableTodoIDs.contains($0) } == true
+            }
+            .map {
+                PomodoroSession(
+                    id: $0.id,
+                    type: $0.type,
+                    startAt: $0.startAt,
+                    endAt: $0.endAt,
+                    durationSeconds: $0.durationSeconds,
+                    relatedTodoID: $0.todoID
+                )
+            }
+
+        planTasks.append(contentsOf: cloudPlans)
+        todos.append(contentsOf: cloudTodos)
+        pomodoroSessions.append(contentsOf: cloudSessions)
+
+        savePlanTasks()
+        saveTodos()
+        saveSessions()
+    }
+
+    private func clearCloudStagingData() {
+        let cloudTodoIDs = Set(todos.filter { Self.isCloudStagingTodo($0) }.map(\.id))
+        let cloudPlanIDs = Set(todos.filter { Self.isCloudStagingTodo($0) }.compactMap(\.planTaskID))
+
+        pomodoroSessions.removeAll { session in
+            session.relatedTodoID.map { cloudTodoIDs.contains($0) } ?? false
+        }
+        todos.removeAll { Self.isCloudStagingTodo($0) }
+        planTasks.removeAll { cloudPlanIDs.contains($0.id) }
+    }
+
+    private static func isDebugSeedTodo(_ todo: TodoItem) -> Bool {
+        todo.note == debugPomodoroSeedMarker || isCloudStagingTodo(todo)
+    }
+
+    private static func isCloudStagingTodo(_ todo: TodoItem) -> Bool {
+        todo.note.hasPrefix(cloudStagingSeedMarker)
+    }
+
     private static let debugPomodoroSeedMarker = "debug-pomodoro-chart-seed"
+    private static let cloudStagingSeedMarker = "debug-cloud-staging-seed"
 #endif
 
     private func beginTicking() {
@@ -653,30 +796,44 @@ final class AppStore: ObservableObject {
     }
 
     private func savePersistentState() {
-        saveTodos()
-        savePlanTasks()
-        saveSessions()
-        saveProfile()
-        saveSettings()
+        let snapshot = StorageSnapshot(
+            todos: todos,
+            planTasks: planTasks,
+            pomodoroSessions: pomodoroSessions,
+            profile: profile,
+            settings: settings
+        )
+        database.saveSnapshot(snapshot)
+        database.saveEntitlement(entitlement)
+        storage.save(todos, for: .todos)
+        storage.save(planTasks, for: .planTasks)
+        storage.save(pomodoroSessions, for: .pomodoroSessions)
+        storage.save(profile, for: .userProfile)
+        storage.save(settings, for: .appSettings)
     }
 
     private func saveTodos() {
+        database.saveTodos(todos)
         storage.save(todos, for: .todos)
     }
 
     private func savePlanTasks() {
+        database.savePlanTasks(planTasks)
         storage.save(planTasks, for: .planTasks)
     }
 
     private func saveSessions() {
+        database.saveSessions(pomodoroSessions)
         storage.save(pomodoroSessions, for: .pomodoroSessions)
     }
 
     private func saveProfile() {
+        database.saveProfile(profile)
         storage.save(profile, for: .userProfile)
     }
 
     private func saveSettings() {
+        database.saveSettings(settings)
         storage.save(settings, for: .appSettings)
     }
 

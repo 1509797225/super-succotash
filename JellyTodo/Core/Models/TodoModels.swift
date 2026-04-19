@@ -379,6 +379,38 @@ struct AppSettings: Codable, Equatable {
     }
 }
 
+enum EntitlementTier: String, Codable, CaseIterable, Identifiable {
+    case free
+    case pro
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .free:
+            return "Free"
+        case .pro:
+            return "Pro"
+        }
+    }
+}
+
+struct EntitlementState: Codable, Equatable {
+    var tier: EntitlementTier
+    var cloudSyncEnabled: Bool
+    var expiresAt: Date?
+
+    var isCloudSyncAvailable: Bool {
+        tier == .pro && cloudSyncEnabled
+    }
+
+    static let `default` = EntitlementState(
+        tier: .free,
+        cloudSyncEnabled: false,
+        expiresAt: nil
+    )
+}
+
 enum PomodoroStatsRange: String, CaseIterable, Identifiable {
     case today
     case week
@@ -491,3 +523,29 @@ struct TaskFocusSummary: Identifiable, Equatable {
     let title: String
     let seconds: Int
 }
+
+#if DEBUG
+struct DatabaseDebugSummary: Equatable {
+    let plans: Int
+    let todos: Int
+    let todayTodos: Int
+    let sessions: Int
+    let entitlement: EntitlementState
+}
+
+enum CloudDebugState: Equatable {
+    case idle
+    case loading(String)
+    case success(String)
+    case failure(String)
+
+    var message: String {
+        switch self {
+        case .idle:
+            return "Cloud staging is ready for API checks and pull tests."
+        case .loading(let message), .success(let message), .failure(let message):
+            return message
+        }
+    }
+}
+#endif

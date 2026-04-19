@@ -14,21 +14,22 @@
 
 当前 App 使用：
 
-- 本地存储：`UserDefaults + Codable`
+- 本地存储：SQLite 第一阶段 + `UserDefaults + Codable` 回滚备份
 - 状态入口：`AppStore`
 - 数据范围：Plan、Today、TodoItem、PomodoroSession、UserProfile、AppSettings、调试插桩数据
-- 云端能力：暂无
+- 云端能力：staging API 已部署，端侧 Debug 入口支持健康检查和只读拉取云测数据
 - 账号体系：暂无
+- 订阅体系：暂无，后续按 Free 本地版 / Pro 云同步版设计
 
-当前方案适合 MVP 快速验证，但不适合长期承载复杂业务数据。
+当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，但仍未完成 Repository、change_logs 和正式同步闭环。
 
 主要风险：
 
-- `UserDefaults` 不适合存放大量任务和番茄记录。
-- 不方便按日期、Plan、完成状态、专注时段做高效查询。
-- 不方便做数据迁移和版本升级。
+- 第一阶段 SQLite 仍采用整表替换保存，尚未充分利用增量 SQL 写入。
+- 尚未建立 Repository 层，页面状态和持久化边界还可以继续拆清楚。
+- 尚未写入 `change_logs`，不能直接做正式增量同步。
 - 不方便做云同步冲突处理。
-- 数据结构变化后，历史数据解析失败风险会增大。
+- 数据结构变化后仍需要更系统的迁移版本管理。
 
 ## 3. 目标架构
 
@@ -51,9 +52,30 @@ PostgreSQL
 原则：
 
 - App 本地数据永远优先可用，离线也能完整使用。
-- 云端只负责备份、同步、多设备恢复和云测数据分发。
+- Free 数据只保存在本机 SQLite，正常重启不丢失，卸载 App 后随沙盒删除而丢失。
+- Pro 数据采用本机 SQLite + 云端同步，支持云备份、云恢复和多设备同步。
+- 云端只负责 Pro 用户的数据备份、同步、多设备恢复和 staging 云测数据分发。
 - iOS App 不直接连接云数据库，只通过 HTTPS API 访问后端服务。
 - 删除操作默认软删除，避免云同步时丢失删除事件。
+- 未获得云同步权益时，不上传用户个人数据。
+
+## 3.1 订阅与数据边界
+
+版本分层：
+
+| 版本 | 本地 SQLite | 云端同步 | 卸载后恢复 | 适用场景 |
+| --- | --- | --- | --- | --- |
+| Free | 支持 | 不支持 | 不支持 | 单设备本地使用 |
+| Pro | 支持 | 支持 | 支持 | 多设备、备份、换机恢复 |
+
+关键规则：
+
+- Free 不是临时内存版，仍然使用 SQLite 做本机持久化。
+- Free 数据生命周期跟随 iOS App 沙盒，卸载 App 后数据清空。
+- Pro 才允许写入 `change_logs` 并触发云同步任务。
+- 用户从 Free 升级 Pro 后，应把当前本地 SQLite 数据作为初始基线上传云端。
+- 用户从 Pro 过期回到 Free 后，本机已有数据继续可用，但暂停上传、下载和多设备同步。
+- 订阅权益必须和账号或匿名云身份绑定；正式生产不可只相信本地开关。
 
 ## 4. 本地数据库方案
 
@@ -62,6 +84,14 @@ PostgreSQL
 推荐：
 
 - `SQLite + GRDB`
+
+当前落地：
+
+- 已新增 `Core/Database/DatabaseClient.swift`
+- 第一阶段先使用系统 `SQLite3`，避免立刻引入第三方依赖导致工程和构建复杂度上升。
+- `DatabaseClient` 负责建表、旧 UserDefaults 快照迁移、读取快照、保存 Plan / Todo / Pomodoro / Profile / Settings / Entitlement。
+- 保存时暂时继续写一份 UserDefaults 备份，确认 SQLite 稳定后再移除旧备份路径。
+- 后续可在当前表结构上引入 `GRDB`，把手写 SQL 迁移到 Repository 层。
 
 不优先推荐：
 
@@ -178,6 +208,24 @@ CREATE TABLE sync_state (
 );
 ```
 
+#### entitlement_state
+
+```sql
+CREATE TABLE entitlement_state (
+  id TEXT PRIMARY KEY DEFAULT 'current',
+  tier TEXT NOT NULL DEFAULT 'free',
+  cloud_sync_enabled INTEGER NOT NULL DEFAULT 0,
+  expires_at TEXT,
+  updated_at TEXT NOT NULL
+);
+```
+
+说明：
+
+- 本地 `entitlement_state` 只用于 UI 和本地同步闸口。
+- 生产环境最终权益必须以后端或 StoreKit 校验结果为准。
+- `cloud_sync_enabled = 0` 时不得上传用户个人数据。
+
 ### 4.3 索引建议
 
 ```sql
@@ -257,6 +305,19 @@ Core
 - 增加登录或匿名账号策略。
 - 上传本地未同步 change_logs。
 - 拉取云端增量变更并合并到本地 SQLite。
+
+### Phase C.5：端侧云测只读接入
+
+当前先接一个低风险调试入口，不进入正式同步闭环：
+
+- 新增 `CloudAPIClient`，默认指向 staging：`http://101.43.104.105`。
+- Debug 浮层支持 `GET /health`，用于真机和模拟器连云验证。
+- Debug 浮层支持 `GET /sync/pull`，只拉取 `debug-user-staging` 云测数据。
+- Debug 浮层支持查看本地数据库摘要，并手动 mock `Free / Pro`；mock 结果会写入 SQLite 的 `entitlement_state`。
+- 拉取的云测数据写入现有 `UserDefaults + Codable` 本地结构，并带 `debug-cloud-staging-seed` 标记。
+- 重复拉取前先清理旧云测数据，不覆盖用户真实数据。
+- 本阶段不实现 `POST /sync/push`，不处理冲突合并，不接正式账号体系。
+- 因 staging 暂未配置 HTTPS，端侧临时允许 HTTP；正式生产必须切换 HTTPS 并收紧 ATS。
 
 ## 6. 云端方案
 
@@ -358,6 +419,38 @@ Async Sync
 - 删除冲突：`deleted_at` 优先级最高。
 - PomodoroSession：默认不可变记录，只追加，不覆盖。
 - Settings：以最后更新时间为准。
+
+### 7.4 订阅同步闸口
+
+本地写入流程：
+
+```text
+User Action
+  ↓
+SQLite Transaction
+  ↓
+Check Entitlement
+  ↓
+Free: local only
+Pro: write change_logs and schedule sync
+```
+
+伪代码：
+
+```swift
+repository.writeLocalChange()
+
+if entitlement.cloudSyncEnabled {
+    changeLogWriter.append(...)
+    syncScheduler.schedule()
+}
+```
+
+注意：
+
+- Free 用户所有核心功能仍走 SQLite，不依赖网络。
+- Pro 过期后不删除云端历史数据，但端侧暂停同步；恢复订阅后再继续拉取和上传。
+- Debug 云测拉取不等于正式同步，不受订阅逻辑约束，但必须仅在 Debug 或 staging 环境开启。
 
 ### 7.3 同步游标
 
@@ -527,11 +620,13 @@ volumes:
 
 优先级建议：
 
-1. 保持现有 `UserDefaults` 版本稳定，继续打磨 UI 和核心体验。
-2. 新建 SQLite/GRDB 技术分支，只做本地数据库迁移，不接云。
-3. 本地迁移完成后，引入 `change_logs`。
-4. 在云服务器部署 `jellytodo-staging`。
-5. 做匿名账号和单设备同步闭环。
-6. 再做多设备同步、冲突处理和正式账号体系。
+1. 保持当前 SQLite 第一阶段稳定，继续打磨 UI 和核心体验。
+2. 把整表替换保存逐步改为 Repository 增量写入。
+3. 继续扩展 `entitlement_state`，当前已支持本地 mock 区分 Free / Pro 行为。
+4. 引入 `change_logs` 写入逻辑，但只在 Pro/mock Pro 下写入同步队列。
+5. 在云服务器继续维护 `jellytodo-staging`。
+6. 做匿名账号和单设备同步闭环。
+7. 接 StoreKit 2 和服务端权益校验。
+8. 再做多设备同步、冲突处理和正式账号体系。
 
 当前不建议直接做云同步代码，因为本地数据层还没有稳定表结构。先完成本地 SQLite 迁移，会让后续上云简单很多。

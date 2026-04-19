@@ -10,6 +10,7 @@
 		01B9B8B2B20189AFB4E97C14 /* TodoEditorSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D57600699839A0731D5B53E /* TodoEditorSheet.swift */; };
 		0D5A0B66CC7F44AC8F24E023 /* TaskDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */; };
 		1311E0D4A4D469D76579494A /* PomodoroStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */; };
+		18D9A4E2C3B14E51A8D70424 /* DatabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */; };
 		1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61CC7569C1C2EB985431761 /* AppStore.swift */; };
 		251B4ECE11D207FF38A94411 /* TodoRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D9168539CEEEB854A4A3073 /* TodoRow.swift */; };
 		2B580DC1B8776A28EE5C51C8 /* JellyTodoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */; };
@@ -24,11 +25,13 @@
 		B2498A326283A62F78110AA2 /* StorageClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE07C3AFE85CE825E307F619 /* StorageClient.swift */; };
 		C6F15E0C30A64DA8A4935E57 /* DebugPomodoroSeedOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6F15E0B30A64DA8A4935E57 /* DebugPomodoroSeedOverlay.swift */; };
 		D4C9F4B9D0E74E19A3B61C88 /* TaskFocusPieIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7E42F33B9134B118B7D91D2 /* TaskFocusPieIcon.swift */; };
+		E1A2B3C4D5E6F70809101114 /* CloudAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1A2B3C4D5E6F70809101113 /* CloudAPIClient.swift */; };
 		F0A2A78239095E63BA328981 /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD473AF3501705CEAA03D764 /* RootTabView.swift */; };
 		FC32E2229ABA371D538BB949 /* CommonComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C376E44067E72899DABFB23 /* CommonComponents.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseClient.swift; sourceTree = "<group>"; };
 		2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JellyTodoApp.swift; sourceTree = "<group>"; };
 		2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PomodoroStatsView.swift; sourceTree = "<group>"; };
 		3C376E44067E72899DABFB23 /* CommonComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommonComponents.swift; sourceTree = "<group>"; };
@@ -47,6 +50,7 @@
 		B4AA1E5D8E761145206F08FC /* TodoModels.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoModels.swift; sourceTree = "<group>"; };
 		C6F15E0B30A64DA8A4935E57 /* DebugPomodoroSeedOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DebugPomodoroSeedOverlay.swift; sourceTree = "<group>"; };
 		D3354589011D47986314B492 /* PlanView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
+		E1A2B3C4D5E6F70809101113 /* CloudAPIClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CloudAPIClient.swift; sourceTree = "<group>"; };
 		EC55FD779DE9523092A5FE66 /* JellyTodo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JellyTodo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		FE07C3AFE85CE825E307F619 /* StorageClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StorageClient.swift; sourceTree = "<group>"; };
 		FE6460C469AD623E933EE070 /* DonutChartView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DonutChartView.swift; sourceTree = "<group>"; };
@@ -164,6 +168,22 @@
 			path = Models;
 			sourceTree = "<group>";
 		};
+		7FE7C29D132F4E7D87FB4DCE /* Cloud */ = {
+			isa = PBXGroup;
+			children = (
+				E1A2B3C4D5E6F70809101113 /* CloudAPIClient.swift */,
+			);
+			path = Cloud;
+			sourceTree = "<group>";
+		};
+		89278D1E8D74407CBAB55C11 /* Database */ = {
+			isa = PBXGroup;
+			children = (
+				18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */,
+			);
+			path = Database;
+			sourceTree = "<group>";
+		};
 		99F88508779308DBE5D906FE /* Theme */ = {
 			isa = PBXGroup;
 			children = (
@@ -194,6 +214,8 @@
 		BA0883E20B8E336DFC23D6D6 /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				7FE7C29D132F4E7D87FB4DCE /* Cloud */,
+				89278D1E8D74407CBAB55C11 /* Database */,
 				7542573EF1D2DAE34F4010A6 /* Models */,
 				29D7802D8C5E3B86F6B3FFE1 /* Storage */,
 				4A481750EF4417CE47E23532 /* Store */,
@@ -299,6 +321,7 @@
 			files = (
 				97540DE6D9BE99AC95AE1840 /* TodoModels.swift in Sources */,
 				B2498A326283A62F78110AA2 /* StorageClient.swift in Sources */,
+				18D9A4E2C3B14E51A8D70424 /* DatabaseClient.swift in Sources */,
 				1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */,
 				98A2A59F5385365D2BE3BC75 /* ThemeTokens.swift in Sources */,
 				35FBBC871FACB54DF40614AF /* Extensions.swift in Sources */,
@@ -314,6 +337,7 @@
 				C6F15E0C30A64DA8A4935E57 /* DebugPomodoroSeedOverlay.swift in Sources */,
 				AD720A1F3AF3BAE91DEBA909 /* DonutChartView.swift in Sources */,
 				D4C9F4B9D0E74E19A3B61C88 /* TaskFocusPieIcon.swift in Sources */,
+				E1A2B3C4D5E6F70809101114 /* CloudAPIClient.swift in Sources */,
 				251B4ECE11D207FF38A94411 /* TodoRow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

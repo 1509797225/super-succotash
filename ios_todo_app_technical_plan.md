@@ -6,7 +6,7 @@
 - 文档名称：iOS Todo App 简洁版技术方案
 - 适用平台：iOS 16+
 - 目标版本：MVP 1.0
-- 产品定位：超轻量本地 Todo 应用，强调纯白灰黑、超大字号、大卡片、果冻感拟态
+- 产品定位：超轻量本地 Todo 应用，强调纯白灰黑、超大字号、大卡片、果冻感拟态；未来通过订阅解锁数据上云
 - 核心目标：快速上线，优先保证 Today 页体验、极低学习成本、流畅稳定
 
 ### 1.1 文档治理规则
@@ -49,6 +49,7 @@
 
 - 账号登录/注册
 - 云同步
+- 订阅购买和订阅状态校验
 - 多端同步
 - 任务标签、优先级、复杂筛选
 - 深色模式大改版
@@ -56,6 +57,24 @@
 
 说明：
 `Set` 页中的“个人账户设置”在 MVP 内定义为本地个人资料设置，不接真实账号系统，不接服务端。
+
+### 2.5 订阅能力边界
+
+后续商业化按 `Free / Pro` 两档设计：
+
+| 版本 | 数据位置 | 卸载后数据 | 云备份/恢复 | 多设备同步 |
+| --- | --- | --- | --- | --- |
+| Free | 仅本机 SQLite | 丢失 | 不支持 | 不支持 |
+| Pro | 本机 SQLite + 云端同步 | 可登录恢复 | 支持 | 支持 |
+
+规则：
+
+- Free 仍支持完整本地核心功能，包括 Plan、Today、番茄钟、统计和本地设置。
+- Free 数据会持久化在 App 沙盒内，正常退出和重启不丢失；卸载 App 后由 iOS 删除沙盒，因此数据丢失。
+- Pro 开启云备份、云恢复和多设备同步。
+- Pro 同步必须基于本地优先架构：所有操作先写入本地 SQLite，再根据订阅状态决定是否写入 change_logs 并同步。
+- 订阅状态校验、Apple IAP、Receipt / StoreKit 2 验证不进入当前 MVP。
+- 未订阅用户不得把个人数据上传云端，除非用户主动升级并明确开启云同步。
 
 ## 3. 设计原则
 
@@ -92,6 +111,7 @@
 - 本地存储：`UserDefaults` + `Codable`
 - 数据升级方向：`SQLite + GRDB`
 - 云端升级方向：`PostgreSQL + Backend API + Docker Compose`
+- 订阅升级方向：`StoreKit 2 + EntitlementState`
 - 状态管理：`ObservableObject` / `@Published`
 - 动画：SwiftUI 原生动画
 - 日期处理：`Calendar` + `DateFormatter`
@@ -137,6 +157,7 @@ App
 - `Core/Models`：定义 Todo、设置、番茄记录等数据模型
 - `Core/Store`：统一承接业务状态和页面数据分发
 - `Core/Storage`：封装 `UserDefaults` 读写
+- `Core/Database`：封装本地 SQLite 建表、迁移和读写；当前第一阶段使用系统 `SQLite3`，后续可替换或包裹为 `GRDB` Repository
 - `Core/Theme`：统一颜色、字号、阴影、圆角、间距 Token
 - `Features/Today`：Today 页面、新增/编辑弹窗、任务详情二级页
 - `Features/Month`：Plan 页面；目录名暂沿用 Month，页面实现为 `PlanView`
@@ -309,27 +330,64 @@ struct AppSettings: Codable, Equatable {
 
 ### 7.4 数据管理升级路线
 
-当前 MVP 保持 `UserDefaults + Codable`，但后续数据复杂度已经超过长期使用 `UserDefaults` 的舒适区。
+当前数据层进入 SQLite 迁移第一阶段：`AppStore` 启动时从 SQLite 加载；首次升级时会从旧 `UserDefaults + Codable` 快照迁移；保存时写入 SQLite，并暂时继续写一份 UserDefaults 备份用于回滚保护。
 
 下一阶段数据层目标：
 
-- 本地数据库迁移到 `SQLite + GRDB`
+- 本地数据库迁移到 `SQLite` 已开始，后续再引入 `GRDB` 或 Repository 层优化查询和迁移表达
 - 新增 Repository 层，页面仍只通过 `AppStore` 或业务接口改状态
 - 所有业务表增加 `updated_at / deleted_at`
 - 删除操作默认软删除，为未来云同步保留删除事件
 - 新增 `change_logs`，记录本地新增、编辑、删除、完成状态变化
-- 云同步采用 `Local-first`：本地先写入，后台再同步
+- 云同步采用 `Local-first`：本地先写入，再根据订阅权益决定是否后台同步
+- 已新增 `EntitlementState`，用于区分 Free 本地版和 Pro 云同步版
+- Debug 调试入口可查看本地数据库摘要，并手动 mock `Free / Pro` 权益状态
 
 专项方案见：
 
 - `data_management_and_cloud_sync_plan.md`
 
+当前端侧云测策略：
+
+- `CloudAPIClient` 只作为 Debug 调试入口，默认连接 `http://101.43.104.105`
+- 支持健康检查和只读拉取 staging 桩数据
+- 云测数据用独立标记写入本地，重复拉取会先清理旧云测数据
+- 支持在 Debug 浮层里 mock 订阅权益；该 mock 会写入本机 SQLite 的 `entitlement_state`
+- 本阶段不做双向同步，不接正式账号，不把 App 直接连到 PostgreSQL
+
 云端目标：
 
 - iOS App 不直接连接云数据库
 - 云端使用 `Backend API + PostgreSQL`
+- 只有 Pro 或内部调试状态允许开启云同步
 - 部署方式优先使用 `Docker Compose`；若 Docker Hub 镜像拉取失败，使用 `cloud/scripts/deploy_native_ubuntu.sh` 原生部署到 Ubuntu + systemd + nginx
 - 云测数据先部署在 `staging`，不污染生产数据
+
+订阅状态草案：
+
+```swift
+enum EntitlementTier: String, Codable {
+    case free
+    case pro
+}
+
+struct EntitlementState: Codable, Equatable {
+    var tier: EntitlementTier
+    var cloudSyncEnabled: Bool
+    var expiresAt: Date?
+}
+```
+
+同步闸口草案：
+
+```swift
+if entitlement.cloudSyncEnabled {
+    writeChangeLog()
+    scheduleCloudSync()
+} else {
+    writeLocalOnly()
+}
+```
 
 ## 8. 状态管理方案
 

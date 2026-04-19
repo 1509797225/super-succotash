@@ -99,13 +99,17 @@ git config user.email "zyl1509797225@gmail.com"
 
 ## 数据与云同步规划
 
-当前版本仍使用 `UserDefaults + Codable` 本地存储。后续数据层升级路线已记录在：
+当前版本已开始迁移到本地 SQLite，并暂时保留 `UserDefaults + Codable` 作为回滚备份。后续数据层升级路线已记录在：
 
 ```text
 data_management_and_cloud_sync_plan.md
 ```
 
 推荐方向为 `SQLite + GRDB` 本地数据库、`Local-first` 增量同步、云端 `PostgreSQL + Backend API`，并先部署 staging 云测环境。部署优先用 Docker Compose；如果服务器拉取 Docker Hub 镜像超时，则使用 Ubuntu 原生部署脚本。
+
+未来商业化按 `Free / Pro` 两档设计：Free 仅本机 SQLite 持久化，卸载 App 后数据随沙盒删除；Pro 才开启云备份、云恢复和多设备同步。
+
+开发期调试浮层已支持查看本地数据库摘要，并手动 mock `Free / Pro` 权益状态；mock 结果会写入本机 SQLite 的 `entitlement_state`。
 
 云测代码已放在：
 
