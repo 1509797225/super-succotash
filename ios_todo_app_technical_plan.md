@@ -328,7 +328,7 @@ struct AppSettings: Codable, Equatable {
 
 - iOS App 不直接连接云数据库
 - 云端使用 `Backend API + PostgreSQL`
-- 部署方式优先使用 `Docker Compose`
+- 部署方式优先使用 `Docker Compose`；若 Docker Hub 镜像拉取失败，使用 `cloud/scripts/deploy_native_ubuntu.sh` 原生部署到 Ubuntu + systemd + nginx
 - 云测数据先部署在 `staging`，不污染生产数据
 
 ## 8. 状态管理方案

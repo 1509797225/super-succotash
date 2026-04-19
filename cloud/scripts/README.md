@@ -1,5 +1,24 @@
 # Cloud Scripts
 
+## Native Ubuntu Deployment
+
+Run this on the Ubuntu server after cloning the repo:
+
+```bash
+cd super-succotash
+APP_USER=ubuntu ./cloud/scripts/deploy_native_ubuntu.sh
+```
+
+This path avoids Docker Hub and installs PostgreSQL, Node.js, nginx, and a `jellytodo-cloud.service` systemd unit directly on Ubuntu.
+
+After deployment:
+
+```bash
+curl http://127.0.0.1/health
+```
+
+For public access, open inbound TCP `80` in the cloud security group. Open `3000` only for temporary direct staging tests.
+
 ## Deploy Staging
 
 Run from repo root:
@@ -14,7 +33,7 @@ POSTGRES_PASSWORD=replace-with-db-password \
 
 If `DEBUG_SECRET` or `POSTGRES_PASSWORD` is omitted, the script generates random values.
 
-Assumptions:
+Docker assumptions:
 
 - Server is Ubuntu or Debian-like with `apt-get`.
 - SSH from your Mac to the server already works.

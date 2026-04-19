@@ -105,7 +105,7 @@ git config user.email "zyl1509797225@gmail.com"
 data_management_and_cloud_sync_plan.md
 ```
 
-推荐方向为 `SQLite + GRDB` 本地数据库、`Local-first` 增量同步、云端 `PostgreSQL + Backend API + Docker Compose`，并先部署 staging 云测环境。
+推荐方向为 `SQLite + GRDB` 本地数据库、`Local-first` 增量同步、云端 `PostgreSQL + Backend API`，并先部署 staging 云测环境。部署优先用 Docker Compose；如果服务器拉取 Docker Hub 镜像超时，则使用 Ubuntu 原生部署脚本。
 
 云测代码已放在：
 
@@ -119,4 +119,10 @@ cloud/
 cd cloud
 cp .env.example .env
 docker compose -f docker-compose.staging.yml up -d --build
+```
+
+国内云服务器 Docker 镜像拉取不稳定时，在服务器仓库根目录执行：
+
+```bash
+APP_USER=ubuntu ./cloud/scripts/deploy_native_ubuntu.sh
 ```

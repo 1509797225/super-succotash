@@ -276,7 +276,7 @@ PostgreSQL
 
 - Backend：`Node.js + NestJS`
 - Database：`PostgreSQL`
-- Deploy：`Docker Compose`
+- Deploy：优先 `Docker Compose`；国内云服务器镜像拉取受限时，使用 Ubuntu 原生部署脚本 `cloud/scripts/deploy_native_ubuntu.sh`
 - Reverse Proxy：`Caddy` 或 `Nginx`
 
 备选：
@@ -461,13 +461,21 @@ cloud/
     └── src
 ```
 
-部署入口：
+Docker 部署入口：
 
 ```bash
 cd cloud
 cp .env.example .env
 docker compose -f docker-compose.staging.yml up -d --build
 ```
+
+Ubuntu 原生部署入口：
+
+```bash
+APP_USER=ubuntu ./cloud/scripts/deploy_native_ubuntu.sh
+```
+
+原生部署会安装 PostgreSQL、Node.js/npm、nginx，并注册 `jellytodo-cloud.service`。如果服务器本机 `curl http://127.0.0.1/health` 成功但公网访问超时，需要在云厂商安全组放行入站 TCP `80`。
 
 ```yaml
 services:

@@ -7,6 +7,7 @@ It is intentionally small:
 - Node.js + Express API
 - PostgreSQL
 - Docker Compose
+- Native Ubuntu + systemd + nginx fallback
 - Debug seed/reset endpoints
 - Basic sync pull/push API shape for future iOS integration
 
@@ -74,6 +75,37 @@ curl 'http://localhost:3000/sync/pull'
 ```
 
 ## Server Deployment
+
+### Option A: Native Ubuntu Deployment
+
+Use this when Docker Hub image pulls are slow or blocked.
+
+On your cloud server:
+
+```bash
+git clone https://github.com/1509797225/super-succotash.git
+cd super-succotash
+chmod +x cloud/scripts/deploy_native_ubuntu.sh
+APP_USER=ubuntu ./cloud/scripts/deploy_native_ubuntu.sh
+```
+
+The script installs PostgreSQL, Node.js/npm, `jellytodo-cloud.service`, and an nginx reverse proxy on port `80`.
+
+Local server health check:
+
+```bash
+curl http://127.0.0.1/health
+```
+
+Public health check after opening the cloud security group:
+
+```bash
+curl http://<server-ip>/health
+```
+
+If public access times out but local access works, open inbound TCP `80` in the cloud provider security group. For direct staging access without nginx, open inbound TCP `3000`.
+
+### Option B: Docker Compose Deployment
 
 On your cloud server:
 
