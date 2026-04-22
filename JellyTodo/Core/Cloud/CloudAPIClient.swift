@@ -19,6 +19,64 @@ private struct CloudAnonymousAuthResponse: Decodable, Equatable {
     let deviceID: String
 }
 
+struct AppleAuthRequest: Encodable {
+    let identityToken: String
+    let authorizationCode: String?
+    let deviceID: String
+    let anonymousUserID: String?
+    let displayName: String?
+    let email: String?
+}
+
+struct MockAuthRequest: Encodable {
+    let nickname: String
+    let email: String
+    let deviceID: String
+    let anonymousUserID: String?
+}
+
+struct AuthRefreshRequest: Encodable {
+    let refreshToken: String
+    let deviceID: String?
+}
+
+struct AuthLogoutRequest: Encodable {
+    let refreshToken: String
+    let deviceID: String?
+}
+
+struct AccountAuthResponse: Decodable, Equatable {
+    let user: AccountUser
+    let accessToken: String
+    let refreshToken: String
+    let expiresAt: Date
+    let migration: AccountMigrationResult?
+}
+
+struct AccountRefreshResponse: Decodable, Equatable {
+    let user: AccountUser
+    let accessToken: String
+    let refreshToken: String
+    let expiresAt: Date
+}
+
+struct AccountMeResponse: Decodable, Equatable {
+    let user: AccountUser
+    let entitlement: CloudEntitlementState
+}
+
+struct CloudEntitlementState: Decodable, Equatable {
+    let userID: String
+    let tier: String
+    let cloudSyncEnabled: Bool
+    let source: String
+    let expiresAt: Date?
+}
+
+struct CloudOKResponse: Decodable, Equatable {
+    let ok: Bool
+}
+
 struct CloudSyncPullResponse: Decodable, Equatable {
     let cursor: Date
     let plans: [CloudPlan]
@@ -190,6 +248,66 @@ struct CloudAPIClient {
         return CloudIdentity(userID: response.userID, deviceID: response.deviceID, createdAt: Date())
     }
 
+    func signInWithApple(
+        identityToken: String,
+        authorizationCode: String?,
+        deviceID: String,
+        anonymousUserID: String?,
+        displayName: String?,
+        email: String?
+    ) async throws -> AccountAuthResponse {
+        try await post(
+            path: "auth/apple",
+            body: AppleAuthRequest(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                deviceID: deviceID,
+                anonymousUserID: anonymousUserID,
+                displayName: displayName,
+                email: email
+            )
+        )
+    }
+
+#if DEBUG
+    func mockStagingLogin(
+        nickname: String,
+        email: String,
+        deviceID: String,
+        anonymousUserID: String?,
+        debugSecret: String
+    ) async throws -> AccountAuthResponse {
+        try await post(
+            path: "debug/auth/mock",
+            body: MockAuthRequest(
+                nickname: nickname,
+                email: email,
+                deviceID: deviceID,
+                anonymousUserID: anonymousUserID
+            ),
+            headers: ["x-debug-secret": debugSecret]
+        )
+    }
+#endif
+
+    func refreshAuthSession(refreshToken: String, deviceID: String?) async throws -> AccountRefreshResponse {
+        try await post(
+            path: "auth/refresh",
+            body: AuthRefreshRequest(refreshToken: refreshToken, deviceID: deviceID)
+        )
+    }
+
+    func logout(refreshToken: String, deviceID: String?) async throws -> CloudOKResponse {
+        try await post(
+            path: "auth/logout",
+            body: AuthLogoutRequest(refreshToken: refreshToken, deviceID: deviceID)
+        )
+    }
+
+    func me(accessToken: String) async throws -> AccountMeResponse {
+        try await get(path: "me", bearerToken: accessToken)
+    }
+
     func pull(
         userID: String = CloudConfig.stagingDebugUserID,
         since: Date? = nil
@@ -267,12 +385,17 @@ struct CloudAPIClient {
         )
     }
 
-    private func get<T: Decodable>(path: String) async throws -> T {
-        try await get(url: baseURL.appendingPathComponent(path))
+    private func get<T: Decodable>(path: String, bearerToken: String? = nil) async throws -> T {
+        try await get(url: baseURL.appendingPathComponent(path), bearerToken: bearerToken)
     }
 
-    private func get<T: Decodable>(url: URL) async throws -> T {
-        let (data, response) = try await session.data(from: url)
+    private func get<T: Decodable>(url: URL, bearerToken: String? = nil) async throws -> T {
+        var request = URLRequest(url: url)
+        if let bearerToken {
+            request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+        }
+
+        let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw CloudAPIError.invalidResponse
         }
@@ -282,10 +405,17 @@ struct CloudAPIClient {
         return try Self.decoder.decode(T.self, from: data)
     }
 
-    private func post<Body: Encodable, Response: Decodable>(path: String, body: Body) async throws -> Response {
+    private func post<Body: Encodable, Response: Decodable>(
+        path: String,
+        body: Body,
+        headers: [String: String] = [:]
+    ) async throws -> Response {
         var request = URLRequest(url: baseURL.appendingPathComponent(path))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        for (key, value) in headers {
+            request.setValue(value, forHTTPHeaderField: key)
+        }
         request.httpBody = try Self.encoder.encode(body)
 
         let (data, response) = try await session.data(for: request)

@@ -13,6 +13,7 @@
 		18D9A4E2C3B14E51A8D70424 /* DatabaseClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */; };
 		1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A61CC7569C1C2EB985431761 /* AppStore.swift */; };
 		21A7D2D3368B4F67A9C45221 /* StoreKitClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21A7D2D2368B4F67A9C45221 /* StoreKitClient.swift */; };
+		21B9A5D4E8214CEB9D7C2E62 /* KeychainClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21B9A5D3E8214CEB9D7C2E62 /* KeychainClient.swift */; };
 		251B4ECE11D207FF38A94411 /* TodoRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D9168539CEEEB854A4A3073 /* TodoRow.swift */; };
 		2B580DC1B8776A28EE5C51C8 /* JellyTodoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */; };
 		35FBBC871FACB54DF40614AF /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2DBB409DDF9AE419764EFA /* Extensions.swift */; };
@@ -34,10 +35,12 @@
 /* Begin PBXFileReference section */
 		18D9A4E2C3B14E51A8D70423 /* DatabaseClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DatabaseClient.swift; sourceTree = "<group>"; };
 		21A7D2D2368B4F67A9C45221 /* StoreKitClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoreKitClient.swift; sourceTree = "<group>"; };
+		21B9A5D3E8214CEB9D7C2E62 /* KeychainClient.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = KeychainClient.swift; sourceTree = "<group>"; };
 		2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = JellyTodoApp.swift; sourceTree = "<group>"; };
 		2D761A52E464A39EB0E30F2A /* PomodoroStatsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PomodoroStatsView.swift; sourceTree = "<group>"; };
 		3C376E44067E72899DABFB23 /* CommonComponents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CommonComponents.swift; sourceTree = "<group>"; };
 		44DDB83DB4B5C5B3C4AB4BE7 /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		44DDB83EB4B5C5B3C4AB4BE7 /* JellyTodo.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = JellyTodo.entitlements; sourceTree = "<group>"; };
 		48C4AEF2E44E4A57A3B5F1B5 /* TaskDetailView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskDetailView.swift; sourceTree = "<group>"; };
 		4AEFE23D0A68552473814A0A /* TodayView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		4D57600699839A0731D5B53E /* TodoEditorSheet.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TodoEditorSheet.swift; sourceTree = "<group>"; };
@@ -108,6 +111,7 @@
 		29D7802D8C5E3B86F6B3FFE1 /* Storage */ = {
 			isa = PBXGroup;
 			children = (
+				21B9A5D3E8214CEB9D7C2E62 /* KeychainClient.swift */,
 				FE07C3AFE85CE825E307F619 /* StorageClient.swift */,
 			);
 			path = Storage;
@@ -240,6 +244,7 @@
 			children = (
 				BA0883E20B8E336DFC23D6D6 /* Core */,
 				B1E5D57BEA82B6C3D26CCED6 /* Features */,
+				44DDB83EB4B5C5B3C4AB4BE7 /* JellyTodo.entitlements */,
 				44DDB83DB4B5C5B3C4AB4BE7 /* Info.plist */,
 				2541A21F02982B45B4BFDE63 /* JellyTodoApp.swift */,
 				A285383F554893A9F40A1E61 /* Resources */,
@@ -324,6 +329,7 @@
 			files = (
 				97540DE6D9BE99AC95AE1840 /* TodoModels.swift in Sources */,
 				B2498A326283A62F78110AA2 /* StorageClient.swift in Sources */,
+				21B9A5D4E8214CEB9D7C2E62 /* KeychainClient.swift in Sources */,
 				18D9A4E2C3B14E51A8D70424 /* DatabaseClient.swift in Sources */,
 				1F947FAD41219E28048FB2D4 /* AppStore.swift in Sources */,
 				21A7D2D3368B4F67A9C45221 /* StoreKitClient.swift in Sources */,

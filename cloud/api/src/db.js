@@ -12,8 +12,11 @@ export async function initSchema() {
       id TEXT PRIMARY KEY,
       email TEXT,
       nickname TEXT NOT NULL DEFAULT '',
+      avatar_url TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
       created_at TIMESTAMPTZ NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL
+      updated_at TIMESTAMPTZ NOT NULL,
+      deleted_at TIMESTAMPTZ
     );
 
     CREATE TABLE IF NOT EXISTS devices (
@@ -21,7 +24,46 @@ export async function initSchema() {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       device_name TEXT NOT NULL DEFAULT '',
       platform TEXT NOT NULL DEFAULT 'ios',
+      auth_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      anonymous_user_id TEXT,
       last_seen_at TIMESTAMPTZ NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_identities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      provider_subject TEXT NOT NULL,
+      email TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(provider, provider_subject)
+    );
+
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_id TEXT,
+      refresh_token_hash TEXT NOT NULL,
+      user_agent TEXT,
+      ip_address TEXT,
+      expires_at TIMESTAMPTZ NOT NULL,
+      revoked_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS account_migrations (
+      id TEXT PRIMARY KEY,
+      anonymous_user_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_id TEXT,
+      plans_count INTEGER NOT NULL DEFAULT 0,
+      todos_count INTEGER NOT NULL DEFAULT 0,
+      sessions_count INTEGER NOT NULL DEFAULT 0,
+      backups_count INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(anonymous_user_id)
     );
 
     CREATE TABLE IF NOT EXISTS cloud_entitlements (
@@ -134,6 +176,13 @@ export async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_pomodoro_todo_id ON pomodoro_sessions(todo_id);
     CREATE INDEX IF NOT EXISTS idx_cloud_entitlements_sync ON cloud_entitlements(user_id, cloud_sync_enabled);
     CREATE INDEX IF NOT EXISTS idx_backup_snapshots_user_created ON backup_snapshots(user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_sessions_user ON auth_sessions(user_id, revoked_at, expires_at);
+
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS auth_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+    ALTER TABLE devices ADD COLUMN IF NOT EXISTS anonymous_user_id TEXT;
   `);
 }
 

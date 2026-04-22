@@ -421,6 +421,62 @@ struct CloudIdentity: Codable, Equatable {
     }
 }
 
+enum AuthProvider: String, Codable, Equatable {
+    case apple
+}
+
+enum AccountStatus: String, Codable, Equatable {
+    case signedOut
+    case signingIn
+    case signedIn
+    case failed
+}
+
+struct AccountUser: Codable, Equatable {
+    let id: String
+    var email: String?
+    var nickname: String
+
+    var shortID: String {
+        String(id.prefix(8))
+    }
+}
+
+struct AuthSession: Codable, Equatable {
+    let accessToken: String
+    let refreshToken: String
+    let expiresAt: Date
+}
+
+struct AccountMigrationResult: Codable, Equatable {
+    let anonymousUserID: String?
+    let migrated: Bool
+    let plans: Int
+    let todos: Int
+    let sessions: Int
+    let backups: Int
+}
+
+struct AccountState: Codable, Equatable {
+    var user: AccountUser?
+    var provider: AuthProvider?
+    var status: AccountStatus
+    var message: String
+    var lastMigration: AccountMigrationResult?
+
+    var isSignedIn: Bool {
+        user != nil && status == .signedIn
+    }
+
+    static let signedOut = AccountState(
+        user: nil,
+        provider: nil,
+        status: .signedOut,
+        message: "Not signed in",
+        lastMigration: nil
+    )
+}
+
 enum StoreKitSubscriptionState: String, Codable, CaseIterable {
     case idle
     case loading

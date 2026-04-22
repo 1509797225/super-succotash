@@ -46,15 +46,18 @@ iOS Keychain 本地保存登录态
 - 云同步和云备份接口当前通过请求体里的 `userID/deviceID` 识别用户。
 - StoreKit 2 端侧骨架与 staging 交易同步接口。
 - `cloud_entitlements` 权益表，staging 当前可自动授予匿名用户 Pro，便于联调。
+- 已完成 Apple 登录一期接入：iOS Set 页展示 Apple 登录入口，服务端支持 Apple identity token 校验、用户创建/命中、匿名数据认领迁移、access token、refresh token、退出登录和 `GET /me`。
+- 已完成开发期 Mock 登录：服务端 `POST /debug/auth/mock` 受 `x-debug-secret` 保护，端侧 DEBUG 下 Set 页展示 `Mock Staging Login`，用于免费开发者账号阶段测试账号链路。
 
 当前不足：
 
-- 没有正式账号登录。
-- 没有 access token / refresh token。
+- Apple 登录已是一期可用状态，但仍需要真机 Apple Developer capability 和 Apple ID 环境验证。
+- Mock 登录只允许 staging/debug 使用，不能进入生产公开入口。
+- 免费 Apple 开发者账号不支持 `Sign in with Apple` capability；当前默认不把 `JellyTodo.entitlements` 参与签名，真实 Apple 登录代码通过 `APPLE_SIGN_IN_ENABLED` 编译开关隐藏。
 - 同步接口还未从 token 中解析用户身份。
-- 匿名身份和正式账号没有绑定/迁移流程。
+- 匿名身份和正式账号已有服务端迁移流程，但还需要更多真机数据场景验证。
 - 订阅权益还没有生产级 App Store Server API 验签。
-- 退出登录、删除账号、换机恢复、合规删除还未实现。
+- 删除账号、换机恢复、合规删除还未实现。
 
 ## 4. 目标
 
@@ -611,31 +614,32 @@ Token 安全：
 
 ### Phase A：文档与服务端表结构
 
-- 新增本文档。
-- 服务端新增 `auth_identities`、`auth_sessions`、`account_migrations`。
-- `users` 表补齐 `avatar_url/status/deleted_at` 等字段。
-- 增加索引和唯一约束。
+- 已完成本文档。
+- 已完成服务端新增 `auth_identities`、`auth_sessions`、`account_migrations`。
+- 已完成 `users` 表补齐 `avatar_url/status/deleted_at` 等字段。
+- 已完成索引和唯一约束。
 
 ### Phase B：Apple 登录服务端
 
-- 实现 Apple JWKS 拉取和缓存。
-- 实现 `POST /auth/apple`。
-- 实现 session 创建、refresh token hash、access token 签发。
-- 实现 `POST /auth/refresh`、`POST /auth/logout`、`GET /me`。
+- 已完成 Apple JWKS 拉取和缓存。
+- 已完成 `POST /auth/apple`。
+- 已完成 session 创建、refresh token hash、access token 签发。
+- 已完成 `POST /auth/refresh`、`POST /auth/logout`、`GET /me`。
 
 ### Phase C：端侧账号状态
 
-- 新增 `AccountState`、`AuthSession`、`AccountClient`、`KeychainClient`。
-- Set 页新增账号模块。
-- 接入 `AuthenticationServices` 的 Apple 登录按钮。
-- 登录成功后保存 token 到 Keychain。
+- 已完成 `AccountState`、`AuthSession`、`KeychainClient`。
+- 已完成 Set 页账号模块。
+- 已完成 `AuthenticationServices` 的 Apple 登录按钮。
+- 已完成登录成功后保存 token 到 Keychain。
+- 已完成 DEBUG 下 Mock Staging Login sheet，支持输入昵称、邮箱和 debug secret。
 
 ### Phase D：匿名迁移
 
-- `POST /auth/apple` 支持 `anonymousUserID`。
-- 服务端迁移匿名云数据到正式 `uid`。
-- 端侧登录成功后触发一次安全同步。
-- Set 页展示迁移结果或失败原因。
+- 已完成 `POST /auth/apple` 支持 `anonymousUserID`。
+- 已完成服务端迁移匿名云数据到正式 `uid`。
+- 端侧登录成功后会把本地 `CloudIdentity.userID` 切到正式 `uid`，并记录迁移状态。
+- 未完成登录成功后自动执行安全同步；下一阶段补。
 
 ### Phase E：同步接口 token 化
 
@@ -702,12 +706,14 @@ UI：
 
 ## 17. 推荐下一步
 
-建议下一步先做服务端账号基础：
+建议下一步：
 
-1. 补 `users`、`auth_identities`、`auth_sessions`、`account_migrations` 表结构。
-2. 实现 Apple token 验证工具。
-3. 实现 `POST /auth/apple`、`POST /auth/refresh`、`POST /auth/logout`、`GET /me`。
-4. 再做端侧 `AccountClient + KeychainClient + Set 页账号模块`。
-5. 最后把同步接口从 `userID` 参数逐步迁移到 Bearer token。
+1. 免费开发者账号阶段，先用 Set 页 `Mock Staging Login` 验证账号状态、Keychain、退出登录和匿名数据迁移。
+2. 付费 Apple Developer Program 开通后，在 Apple Developer 后台确认 `com.zhang.JellyTodo` 已开启 `Sign in with Apple` capability。
+3. 付费账号阶段再恢复 `CODE_SIGN_ENTITLEMENTS = JellyTodo/JellyTodo.entitlements`，并给 Swift 编译条件增加 `APPLE_SIGN_IN_ENABLED`。
+4. 用真机点击 Set 页 Apple 登录，验证 Apple 弹窗、服务端 token 校验和账号状态持久化。
+5. 登录成功后补一次“安全同步”动作，把本地最新数据上传到正式 `uid`。
+6. 把同步接口从 `userID` 参数逐步迁移到 Bearer token。
+7. 接入 App Store Server API / JWS 验签，让 Pro 权益绑定正式账号。
 
 这条路径最稳：先有账号身份，再做数据归属，再做同步鉴权，避免账号还没稳定就大改同步逻辑。

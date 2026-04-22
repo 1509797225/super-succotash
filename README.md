@@ -9,6 +9,7 @@ GitHub 仓库：`1509797225/super-succotash`
 - `Plan`：展示可折叠任务组，任务组下可继续新增 item，item 可左滑加入 Today。
 - `Today`：展示今日待办，支持新增、编辑、删除、完成状态切换。
 - `Set`：本地个人资料、主题、偏好设置、订阅状态、备份与同步。
+- `Account`：Set 页支持 Sign in with Apple 一期接入，登录态写入 Keychain；DEBUG 下提供 Mock Staging Login 方便免费开发者账号阶段联调。
 - `Task Sheet`：轻点任务打开底部半模态操作面板，可进入专注、编辑、删除、查看已专注时长。
 - `Focus`：任务级番茄钟专注页，支持正向/倒向计时、暂停、继续、停止。
 - `Landscape Focus`：Focus 页支持手动横竖屏切换，横屏隐藏底部 TabBar。
@@ -90,7 +91,7 @@ git config user.email "zyl1509797225@gmail.com"
 
 本期暂不包含：
 
-- 账号登录或注册
+- 密码账号登录或注册
 - 多端同步
 - 通知推送
 - Widget
@@ -116,7 +117,7 @@ data_management_and_cloud_sync_plan.md
 account_auth_integration_plan.md
 ```
 
-当前推荐采用 `Sign in with Apple + 自建轻量认证层`，用户数据、订阅权益和云同步归属仍由 JellyTodo 后端管理。
+当前采用 `Sign in with Apple + 自建轻量认证层`，用户数据、订阅权益和云同步归属仍由 JellyTodo 后端管理。Apple 登录一期代码已接入，但免费开发者账号阶段默认不启用 Apple 登录 entitlement，先用 DEBUG 下的 Mock Staging Login 联调；完整同步接口 token 化仍在后续阶段。
 
 开发期调试浮层已支持查看本地数据库摘要，并手动 mock `Free / Pro` 权益状态；mock 结果会写入本机 SQLite 的 `entitlement_state`。
 

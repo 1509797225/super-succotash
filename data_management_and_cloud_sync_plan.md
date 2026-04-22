@@ -19,7 +19,7 @@
 - 状态入口：`AppStore`
 - 数据范围：Plan、Today、TodoItem、PomodoroSession、UserProfile、AppSettings、调试插桩数据
 - 云端能力：staging API 已部署，端侧 Debug 入口支持健康检查、只读拉取云测数据，Set 页支持 Pro/mock Pro 手动同步、云端备份点创建、云端恢复点列表和显式恢复
-- 账号体系：暂无正式账号；专项方案已定义在 `account_auth_integration_plan.md`，推荐一期采用 `Sign in with Apple + 自建轻量认证层`
+- 账号体系：Apple 登录一期已接入，专项方案定义在 `account_auth_integration_plan.md`；同步接口仍处于 `userID/deviceID` 兼容阶段，后续迁移到 Bearer token
 - 订阅体系：端侧已接入 StoreKit 2 骨架，服务端已建立 `cloud_entitlements` 权益闸口和 staging 交易同步接口；staging 匿名身份当前自动授予 Pro 同步资格，便于联调
 
 当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，并完成 `change_logs`、本地恢复点、云端备份点、Set 页 `Backup & Sync` 入口、StoreKit 2 端侧骨架、StoreKit staging 交易同步、匿名云身份、服务端权益闸口、staging 手动 push、基础 pull merge 和安全版前台自动同步。正式生产级同步仍未完成，因为还缺 App Store Server API 级交易验签、多设备冲突策略和云端恢复后的“设为新基线”策略。

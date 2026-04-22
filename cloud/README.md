@@ -61,6 +61,20 @@ curl -H 'x-debug-secret: change-this-debug-secret' \
   http://localhost:3000/debug/summary
 ```
 
+Mock staging account login:
+
+```bash
+curl -X POST http://localhost:3000/debug/auth/mock \
+  -H 'Content-Type: application/json' \
+  -H 'x-debug-secret: change-this-debug-secret' \
+  -d '{
+    "nickname": "Zhang Dev",
+    "email": "dev@jellytodo.local",
+    "deviceID": "debug-ios-device",
+    "anonymousUserID": "optional-anonymous-user-id"
+  }'
+```
+
 Reset staging data:
 
 ```bash

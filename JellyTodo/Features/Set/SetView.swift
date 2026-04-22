@@ -1,4 +1,7 @@
 import SwiftUI
+#if APPLE_SIGN_IN_ENABLED
+import AuthenticationServices
+#endif
 
 private struct ProfileEditorSheet: View {
     let profile: UserProfile
@@ -190,6 +193,70 @@ private struct BackupPointsSheet: View {
     }
 }
 
+#if DEBUG
+private struct MockStagingLoginSheet: View {
+    let onLogin: (String, String, String) -> Void
+
+    @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
+    @Environment(\.dismiss) private var dismiss
+    @State private var nickname = "Zhang Dev"
+    @State private var email = "dev@jellytodo.local"
+    @State private var debugSecret = ""
+
+    var body: some View {
+        BottomSheetContainer(title: language == .chinese ? "开发账号登录" : "Mock Staging Login") {
+            VStack(spacing: 16) {
+                TextField("Nickname", text: $nickname)
+                    .textInputAutocapitalization(.words)
+                    .font(ThemeTokens.Typography.body)
+                    .padding(.horizontal, 20)
+                    .frame(height: ThemeTokens.Metrics.controlHeight)
+                    .background(ThemeTokens.card(for: themeMode))
+                    .clipShape(Capsule())
+
+                TextField("Email", text: $email)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(ThemeTokens.Typography.body)
+                    .padding(.horizontal, 20)
+                    .frame(height: ThemeTokens.Metrics.controlHeight)
+                    .background(ThemeTokens.card(for: themeMode))
+                    .clipShape(Capsule())
+
+                SecureField("Debug Secret", text: $debugSecret)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(ThemeTokens.Typography.body)
+                    .padding(.horizontal, 20)
+                    .frame(height: ThemeTokens.Metrics.controlHeight)
+                    .background(ThemeTokens.card(for: themeMode))
+                    .clipShape(Capsule())
+
+                Text(language == .chinese ? "仅 DEBUG/staging 使用，用来绕过免费开发者账号无法调起 Apple 登录的问题。" : "DEBUG/staging only. This lets us test account flow before Apple capability is available.")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                HStack(spacing: 16) {
+                    CapsuleButton(title: L10n.t(.cancel, language)) {
+                        dismiss()
+                    }
+
+                    CapsuleButton(title: language == .chinese ? "登录" : "Login") {
+                        onLogin(nickname, email, debugSecret)
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.height(430)])
+        .presentationDragIndicator(.hidden)
+    }
+}
+#endif
+
 private struct CloudBackupPointsSheet: View {
     let backups: [CloudBackupSnapshot]
     let onRestore: (CloudBackupSnapshot) -> Void
@@ -313,6 +380,9 @@ struct SetView: View {
     @State private var showingCloudBackupPoints = false
     @State private var backupPendingRestore: LocalBackupSnapshot?
     @State private var cloudBackupPendingRestore: CloudBackupSnapshot?
+#if DEBUG
+    @State private var showingMockStagingLogin = false
+#endif
 
     var body: some View {
         ScrollView {
@@ -323,6 +393,9 @@ struct SetView: View {
                     .padding(.top, 26)
 
                 plusCard
+
+                settingsLabel(backupText(english: "Account", chinese: "账号"))
+                accountGroup
 
                 settingsLabel(L10n.t(.profile, language))
                 profileRow
@@ -386,6 +459,19 @@ struct SetView: View {
                 }
             )
         }
+#if DEBUG
+        .sheet(isPresented: $showingMockStagingLogin) {
+            MockStagingLoginSheet { nickname, email, debugSecret in
+                Task {
+                    await store.mockStagingAccountLogin(
+                        nickname: nickname,
+                        email: email,
+                        debugSecret: debugSecret
+                    )
+                }
+            }
+        }
+#endif
         .confirmationDialog(
             backupText(english: "Restore Backup?", chinese: "恢复这个备份？"),
             isPresented: Binding(
@@ -525,6 +611,101 @@ struct SetView: View {
             .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         }
         .buttonStyle(.plain)
+    }
+
+    private var accountGroup: some View {
+        VStack(spacing: 0) {
+            settingLine(
+                icon: store.accountState.isSignedIn ? "person.crop.circle.badge.checkmark" : "person.crop.circle.badge.plus",
+                title: backupText(english: "Apple Account", chinese: "Apple 账号"),
+                value: accountStatusValue
+            )
+
+            if let user = store.accountState.user {
+                settingDivider
+
+                settingLine(
+                    icon: "number.circle.fill",
+                    title: backupText(english: "UID", chinese: "用户 ID"),
+                    value: user.shortID
+                )
+
+                if let email = user.email, !email.isEmpty {
+                    settingDivider
+
+                    settingLine(
+                        icon: "envelope.fill",
+                        title: backupText(english: "Email", chinese: "邮箱"),
+                        value: String(email.prefix(22))
+                    )
+                }
+            }
+
+            if !store.accountState.message.isEmpty {
+                settingDivider
+
+                settingLine(
+                    icon: "text.bubble.fill",
+                    title: backupText(english: "Status", chinese: "状态"),
+                    value: store.accountState.message
+                )
+            }
+
+            settingDivider
+
+            if store.accountState.isSignedIn {
+                Button {
+                    Task {
+                        await store.logoutAccount()
+                    }
+                } label: {
+                    settingLine(
+                        icon: "rectangle.portrait.and.arrow.right.fill",
+                        title: backupText(english: "Sign Out", chinese: "退出登录"),
+                        value: backupText(english: "Keep Local", chinese: "保留本地"),
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+#if APPLE_SIGN_IN_ENABLED
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = [.fullName, .email]
+                } onCompletion: { result in
+                    handleAppleSignIn(result)
+                }
+                .signInWithAppleButtonStyle(.black)
+                .frame(height: 54)
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+#else
+                settingLine(
+                    icon: "apple.logo",
+                    title: backupText(english: "Apple Sign In", chinese: "Apple 登录"),
+                    value: backupText(english: "Developer Required", chinese: "需付费账号")
+                )
+#endif
+
+#if DEBUG
+                settingDivider
+
+                Button {
+                    showingMockStagingLogin = true
+                } label: {
+                    settingLine(
+                        icon: "hammer.circle.fill",
+                        title: backupText(english: "Mock Staging Login", chinese: "开发账号登录"),
+                        value: backupText(english: "DEBUG", chinese: "调试"),
+                        showsChevron: true
+                    )
+                }
+                .buttonStyle(.plain)
+#endif
+            }
+        }
+        .background(groupBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
     }
 
     private var baseSettingsGroup: some View {
@@ -859,6 +1040,21 @@ struct SetView: View {
         .system(size: 18, weight: .bold, design: .rounded)
     }
 
+    private var accountStatusValue: String {
+        switch store.accountState.status {
+        case .signedIn:
+            return store.accountState.user?.nickname.isEmpty == false
+                ? store.accountState.user?.nickname ?? backupText(english: "Signed In", chinese: "已登录")
+                : backupText(english: "Signed In", chinese: "已登录")
+        case .signingIn:
+            return backupText(english: "Signing In", chinese: "登录中")
+        case .failed:
+            return backupText(english: "Failed", chinese: "失败")
+        case .signedOut:
+            return backupText(english: "Not Signed In", chinese: "未登录")
+        }
+    }
+
     private var cloudSyncValue: String {
         if store.entitlement.isCloudSyncAvailable {
             return backupText(english: "Pro On", chinese: "Pro 已开启")
@@ -951,6 +1147,38 @@ struct SetView: View {
             .padding(.leading, 2)
             .padding(.bottom, -14)
     }
+
+#if APPLE_SIGN_IN_ENABLED
+    private func handleAppleSignIn(_ result: Result<ASAuthorization, Error>) {
+        switch result {
+        case let .success(authorization):
+            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
+                  let identityTokenData = credential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8)
+            else { return }
+
+            let authorizationCode = credential.authorizationCode.flatMap {
+                String(data: $0, encoding: .utf8)
+            }
+            let displayName = [credential.fullName?.givenName, credential.fullName?.familyName]
+                .compactMap { $0 }
+                .joined(separator: " ")
+            let normalizedName = displayName.isEmpty ? nil : displayName
+
+            Task {
+                await store.signInWithApple(
+                    identityToken: identityToken,
+                    authorizationCode: authorizationCode,
+                    displayName: normalizedName,
+                    email: credential.email
+                )
+            }
+
+        case .failure:
+            break
+        }
+    }
+#endif
 
     private func settingLine(
         icon: String,

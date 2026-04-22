@@ -227,6 +227,41 @@ struct DatabaseClient {
         }
     }
 
+    func loadAccountState() -> AccountState {
+        do {
+            let database = try openDatabase()
+            defer { sqlite3_close(database) }
+            try setupSchema(in: database)
+            guard let value = try metaValue(for: "account_state", in: database),
+                  let data = value.data(using: .utf8)
+            else { return .signedOut }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            return try decoder.decode(AccountState.self, from: data)
+        } catch {
+            return .signedOut
+        }
+    }
+
+    func saveAccountState(_ state: AccountState) {
+        write { database in
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let data = try encoder.encode(state)
+            guard let value = String(data: data, encoding: .utf8) else { return }
+            try setMetaValue(value, for: "account_state", in: database)
+        }
+    }
+
+    func clearAccountState() {
+        write { database in
+            try run(sql: "DELETE FROM meta WHERE key = ?;", in: database) { statement in
+                sqlite3_bind_text(statement, 1, "account_state", -1, SQLITE_TRANSIENT)
+            }
+        }
+    }
+
     func saveSnapshot(_ snapshot: StorageSnapshot) {
         write { database in
             try replacePlanTasks(snapshot.planTasks, in: database)

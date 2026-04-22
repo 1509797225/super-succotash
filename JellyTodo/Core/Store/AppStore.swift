@@ -10,6 +10,7 @@ final class AppStore: ObservableObject {
     @Published var settings: AppSettings = .default
     @Published var entitlement: EntitlementState = .default
     @Published var cloudIdentity: CloudIdentity?
+    @Published var accountState: AccountState = .signedOut
     @Published var storeKitEntitlement: StoreKitEntitlementSnapshot = .idle
     @Published var syncHistory: [SyncHistoryEntry] = []
     @Published var localBackups: [LocalBackupSnapshot] = []
@@ -24,6 +25,7 @@ final class AppStore: ObservableObject {
     private let database: DatabaseClient
     private let cloudAPI: CloudAPIClient
     private let storeKitClient: StoreKitClient
+    private let keychain: KeychainClient
     private var timerCancellable: AnyCancellable?
     private var hasLoadedInitialState = false
     private var isCloudSyncInFlight = false
@@ -33,12 +35,14 @@ final class AppStore: ObservableObject {
         storage: StorageClient = StorageClient(),
         database: DatabaseClient = DatabaseClient(),
         cloudAPI: CloudAPIClient = CloudAPIClient(),
-        storeKitClient: StoreKitClient = StoreKitClient()
+        storeKitClient: StoreKitClient = StoreKitClient(),
+        keychain: KeychainClient = KeychainClient()
     ) {
         self.storage = storage
         self.database = database
         self.cloudAPI = cloudAPI
         self.storeKitClient = storeKitClient
+        self.keychain = keychain
     }
 
     var preferredColorScheme: ColorScheme? {
@@ -109,6 +113,7 @@ final class AppStore: ObservableObject {
                     snapshot: database.loadSnapshot(legacySnapshot: storage.loadSnapshot()),
                     entitlement: database.loadEntitlement(),
                     cloudIdentity: database.loadCloudIdentity(),
+                    accountState: database.loadAccountState(),
                     syncHistory: database.loadSyncHistory(),
                     localBackups: database.loadLocalBackupSnapshots(),
                     pendingUploadCount: database.pendingChangeLogCount()
@@ -122,6 +127,7 @@ final class AppStore: ObservableObject {
             settings = appState.snapshot.settings
             entitlement = appState.entitlement
             cloudIdentity = appState.cloudIdentity
+            accountState = appState.accountState
             syncHistory = appState.syncHistory
             localBackups = appState.localBackups
             pendingUploadCount = appState.pendingUploadCount
@@ -647,6 +653,227 @@ final class AppStore: ObservableObject {
         )
         triggerHaptic()
     }
+
+    func signInWithApple(
+        identityToken: String,
+        authorizationCode: String?,
+        displayName: String?,
+        email: String?
+    ) async {
+        accountState = AccountState(
+            user: accountState.user,
+            provider: .apple,
+            status: .signingIn,
+            message: "Signing in with Apple",
+            lastMigration: accountState.lastMigration
+        )
+
+        do {
+            let anonymousIdentity = try await resolveCloudIdentity()
+            let response = try await cloudAPI.signInWithApple(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                deviceID: anonymousIdentity.deviceID,
+                anonymousUserID: anonymousIdentity.userID,
+                displayName: displayName,
+                email: email
+            )
+
+            let session = AuthSession(
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                expiresAt: response.expiresAt
+            )
+            keychain.saveSession(session)
+
+            accountState = AccountState(
+                user: response.user,
+                provider: .apple,
+                status: .signedIn,
+                message: response.migration?.migrated == true ? "Signed in · migrated cloud data" : "Signed in",
+                lastMigration: response.migration
+            )
+            database.saveAccountState(accountState)
+
+            cloudIdentity = CloudIdentity(
+                userID: response.user.id,
+                deviceID: anonymousIdentity.deviceID,
+                createdAt: Date()
+            )
+            if let cloudIdentity {
+                database.saveCloudIdentity(cloudIdentity)
+            }
+
+            if response.migration?.migrated == true {
+                database.saveCloudPullCursor(Date(timeIntervalSince1970: 0))
+            }
+
+            recordSyncHistory(
+                direction: .full,
+                status: .success,
+                changedCount: (response.migration?.plans ?? 0) + (response.migration?.todos ?? 0) + (response.migration?.sessions ?? 0),
+                message: accountState.message
+            )
+            triggerHaptic()
+        } catch {
+            accountState = AccountState(
+                user: accountState.user,
+                provider: .apple,
+                status: .failed,
+                message: error.localizedDescription,
+                lastMigration: accountState.lastMigration
+            )
+            database.saveAccountState(accountState)
+            recordSyncHistory(
+                direction: .full,
+                status: .failed,
+                message: "Apple sign in failed: \(error.localizedDescription)"
+            )
+        }
+    }
+
+    func refreshAccount() async {
+        guard let session = keychain.loadSession() else {
+            accountState = .signedOut
+            database.saveAccountState(accountState)
+            return
+        }
+
+        do {
+            let response = try await cloudAPI.me(accessToken: session.accessToken)
+            accountState = AccountState(
+                user: response.user,
+                provider: .apple,
+                status: .signedIn,
+                message: "Account refreshed",
+                lastMigration: accountState.lastMigration
+            )
+            database.saveAccountState(accountState)
+
+            entitlement = EntitlementState(
+                tier: EntitlementTier(rawValue: response.entitlement.tier) ?? .free,
+                cloudSyncEnabled: response.entitlement.cloudSyncEnabled,
+                expiresAt: response.entitlement.expiresAt
+            )
+            database.saveEntitlement(entitlement)
+        } catch {
+            accountState = AccountState(
+                user: accountState.user,
+                provider: .apple,
+                status: .failed,
+                message: error.localizedDescription,
+                lastMigration: accountState.lastMigration
+            )
+            database.saveAccountState(accountState)
+        }
+    }
+
+    func logoutAccount() async {
+        let session = keychain.loadSession()
+        keychain.clearSession()
+        if let session {
+            _ = try? await cloudAPI.logout(
+                refreshToken: session.refreshToken,
+                deviceID: cloudIdentity?.deviceID
+            )
+        }
+
+        accountState = .signedOut
+        database.clearAccountState()
+        recordSyncHistory(
+            direction: .full,
+            status: .success,
+            message: "Signed out · local data kept"
+        )
+        triggerHaptic()
+    }
+
+#if DEBUG
+    func mockStagingAccountLogin(
+        nickname: String,
+        email: String,
+        debugSecret: String
+    ) async {
+        let trimmedSecret = debugSecret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSecret.isEmpty else {
+            accountState = AccountState(
+                user: accountState.user,
+                provider: .apple,
+                status: .failed,
+                message: "Debug secret is required",
+                lastMigration: accountState.lastMigration
+            )
+            database.saveAccountState(accountState)
+            return
+        }
+
+        accountState = AccountState(
+            user: accountState.user,
+            provider: .apple,
+            status: .signingIn,
+            message: "Signing in with mock staging account",
+            lastMigration: accountState.lastMigration
+        )
+
+        do {
+            let anonymousIdentity = try await resolveCloudIdentity()
+            let response = try await cloudAPI.mockStagingLogin(
+                nickname: nickname.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Jelly Dev" : nickname,
+                email: email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "dev@jellytodo.local" : email,
+                deviceID: anonymousIdentity.deviceID,
+                anonymousUserID: anonymousIdentity.userID,
+                debugSecret: trimmedSecret
+            )
+
+            let session = AuthSession(
+                accessToken: response.accessToken,
+                refreshToken: response.refreshToken,
+                expiresAt: response.expiresAt
+            )
+            keychain.saveSession(session)
+
+            accountState = AccountState(
+                user: response.user,
+                provider: .apple,
+                status: .signedIn,
+                message: response.migration?.migrated == true ? "Mock signed in · migrated cloud data" : "Mock signed in",
+                lastMigration: response.migration
+            )
+            database.saveAccountState(accountState)
+
+            cloudIdentity = CloudIdentity(
+                userID: response.user.id,
+                deviceID: anonymousIdentity.deviceID,
+                createdAt: Date()
+            )
+            if let cloudIdentity {
+                database.saveCloudIdentity(cloudIdentity)
+            }
+
+            recordSyncHistory(
+                direction: .full,
+                status: .success,
+                changedCount: (response.migration?.plans ?? 0) + (response.migration?.todos ?? 0) + (response.migration?.sessions ?? 0),
+                message: accountState.message
+            )
+            triggerHaptic()
+        } catch {
+            accountState = AccountState(
+                user: accountState.user,
+                provider: .apple,
+                status: .failed,
+                message: error.localizedDescription,
+                lastMigration: accountState.lastMigration
+            )
+            database.saveAccountState(accountState)
+            recordSyncHistory(
+                direction: .full,
+                status: .failed,
+                message: "Mock staging login failed: \(error.localizedDescription)"
+            )
+        }
+    }
+#endif
 
     func stats(for range: PomodoroStatsRange) -> PomodoroStats {
         let sessions = sessions(in: range)
