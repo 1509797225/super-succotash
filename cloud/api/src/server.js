@@ -965,15 +965,16 @@ async function mergeTodo(client, userID, deviceID, change, payload) {
 
   await client.query(
     `
-    INSERT INTO todo_items (
-      id, user_id, device_id, plan_id, title, note, is_completed, is_added_to_today,
-      task_date, cycle, daily_duration_minutes, focus_timer_direction, created_at, updated_at,
-      server_updated_at
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
-    ON CONFLICT (id) DO UPDATE SET
-      plan_id = EXCLUDED.plan_id,
-      title = EXCLUDED.title,
+	    INSERT INTO todo_items (
+	      id, user_id, device_id, plan_id, source_template_id, title, note, is_completed, is_added_to_today,
+	      task_date, cycle, daily_duration_minutes, focus_timer_direction, created_at, updated_at,
+	      server_updated_at
+	    )
+	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())
+	    ON CONFLICT (id) DO UPDATE SET
+	      plan_id = EXCLUDED.plan_id,
+	      source_template_id = EXCLUDED.source_template_id,
+	      title = EXCLUDED.title,
       note = EXCLUDED.note,
       is_completed = EXCLUDED.is_completed,
       is_added_to_today = EXCLUDED.is_added_to_today,
@@ -989,18 +990,19 @@ async function mergeTodo(client, userID, deviceID, change, payload) {
     [
       change.entityID,
       userID,
-      deviceID,
-      payload.planTaskID ?? null,
-      payload.title ?? "Untitled",
-      payload.note ?? "",
+	      deviceID,
+	      payload.planTaskID ?? null,
+	      payload.sourceTemplateID ?? null,
+	      payload.title ?? "Untitled",
+	      payload.note ?? "",
       Boolean(payload.isCompleted),
       payload.isAddedToToday ?? true,
       payload.taskDate ?? change.createdAt,
       payload.cycle ?? "daily",
       payload.dailyDurationMinutes ?? 25,
-      payload.focusTimerDirection ?? "countDown",
-      payload.createdAt ?? change.createdAt,
-      payload.updatedAt ?? change.createdAt,
+	      payload.focusTimerDirection ?? "countDown",
+	      payload.createdAt ?? change.createdAt,
+	      payload.updatedAt ?? change.createdAt,
     ]
   );
 }
@@ -1013,21 +1015,26 @@ async function mergePomodoroSession(client, userID, deviceID, change, payload) {
 
   await client.query(
     `
-    INSERT INTO pomodoro_sessions (
-      id, user_id, device_id, todo_id, type, start_at, end_at, duration_seconds,
-      created_at, updated_at, server_updated_at
-    )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $7, $7, now())
-    ON CONFLICT (id) DO NOTHING
+	    INSERT INTO pomodoro_sessions (
+	      id, user_id, device_id, plan_id, todo_id, source_template_id,
+	      plan_title_snapshot, todo_title_snapshot, type, start_at, end_at, duration_seconds,
+	      created_at, updated_at, server_updated_at
+	    )
+	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $11, $11, now())
+	    ON CONFLICT (id) DO NOTHING
     `,
     [
-      change.entityID,
-      userID,
-      deviceID,
-      payload.relatedTodoID ?? null,
-      payload.type ?? "focus",
-      payload.startAt ?? change.createdAt,
-      payload.endAt ?? change.createdAt,
+	      change.entityID,
+	      userID,
+	      deviceID,
+	      payload.planTaskID ?? null,
+	      payload.relatedTodoID ?? null,
+	      payload.sourceTemplateID ?? null,
+	      payload.planTitleSnapshot ?? "",
+	      payload.todoTitleSnapshot ?? "",
+	      payload.type ?? "focus",
+	      payload.startAt ?? change.createdAt,
+	      payload.endAt ?? change.createdAt,
       payload.durationSeconds ?? 0,
     ]
   );

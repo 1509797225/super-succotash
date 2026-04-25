@@ -60,6 +60,7 @@ struct JellyTodoApp: App {
                 .environmentObject(store)
                 .environment(\.appThemeMode, store.settings.themeMode)
                 .environment(\.appLanguage, store.settings.language)
+                .environment(\.appTextScale, store.settings.textScale)
                 .environment(\.locale, Locale(identifier: store.settings.language.localeIdentifier))
                 .preferredColorScheme(store.preferredColorScheme)
                 .background(ThemeTokens.background(for: store.settings.themeMode).ignoresSafeArea())
@@ -68,6 +69,7 @@ struct JellyTodoApp: App {
                 }
                 .onChange(of: scenePhase) { phase in
                     guard phase == .active else { return }
+                    store.materializeTodayOccurrencesIfNeeded()
                     Task {
                         await store.performForegroundAutoSyncIfNeeded()
                     }

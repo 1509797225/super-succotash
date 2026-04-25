@@ -41,6 +41,7 @@
 - Plan / Today / Set 三个一级页面
 - Today 页顶部番茄钟统计入口
 - 完整番茄钟计时能力，时长来自任务自身的 `Daily Duration`，不再使用固定 Focus / Short Break / Long Break 时长配置
+- 任务周期闭环：Plan item 作为长期模板，Today task 作为某一天的执行实例；周期规则自动生成当天实例
 - 本地任务持久化
 - 本地设置持久化
 - 本地番茄钟统计持久化
@@ -173,6 +174,7 @@ App
 struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
     var planTaskID: UUID?
+    var sourceTemplateID: UUID?
     var isAddedToToday: Bool
     var title: String
     var isCompleted: Bool
@@ -190,13 +192,14 @@ struct TodoItem: Identifiable, Codable, Equatable {
 
 - `id`：唯一标识
 - `planTaskID`：可选计划任务组 ID；为空表示普通独立 Todo
-- `isAddedToToday`：是否已加入 Today；普通 Todo 默认为 true，Plan item 默认 false
+- `sourceTemplateID`：Today 执行实例来源的 Plan item 模板 ID；为空表示模板或独立 Todo
+- `isAddedToToday`：是否参与 Today 展示；Plan item 模板固定为 false，Today 执行实例固定为 true
 - `title`：任务标题
 - `isCompleted`：完成状态
 - `createdAt`：创建时间
 - `updatedAt`：最近修改时间
 - `taskDate`：任务归属日期；仅 `isAddedToToday = true` 且日期为今天时参与 Today 展示
-- `cycle`：任务周期，用于详情页展示与后续计划扩展
+- `cycle`：任务周期，驱动 Today 执行实例自动生成
 - `dailyDurationMinutes`：每天计划投入时长，单位分钟
 - `focusTimerDirection`：开始专注时的计时方向，支持倒计时和正计时
 - `note`：任务正文/备注内容
@@ -205,6 +208,40 @@ struct TodoItem: Identifiable, Codable, Equatable {
 
 - 新增字段必须有默认值，读取旧版本 `UserDefaults` 数据时不能闪退
 - 默认周期为 `Daily`，默认每天时长为 `25` 分钟，默认计时方向为 `Count Down`，默认正文为空
+
+### 6.1.1 任务周期闭环规则
+
+核心定义：
+
+- `PlanTask` 是计划组，例如“考研”。
+- `TodoItem` 在 `planTaskID != nil && sourceTemplateID == nil && isAddedToToday == false` 时，是 Plan item 模板，例如“高数刷题”。
+- `TodoItem` 在 `sourceTemplateID != nil && isAddedToToday == true` 时，是 Today 执行实例，例如“今天的高数刷题”。
+- 普通 Today 任务仍允许存在，表现为 `planTaskID == nil && sourceTemplateID == nil && isAddedToToday == true`。
+
+自动生成：
+
+- App 启动、回到前台、跨天时调用周期物化逻辑，为今天创建应该出现的执行实例。
+- 同一模板同一天只允许存在一个执行实例。
+- 执行实例继承模板的标题、周期、每日时长、计时方向和正文。
+- 完成 Today 实例只代表完成当天，不会把 Plan item 模板永久完成。
+
+周期语义：
+
+- `Manual`：不自动生成，只能用户手动加入 Today。
+- `Once`：自动生成一次；如果已经生成过任意日期实例，则不再自动生成。
+- `Daily`：每天生成一条当天实例。
+- `Weekly`：按模板 `taskDate` 所在星期生成；第一版不做多选周几。
+- `Monthly`：按模板 `taskDate` 所在日生成；当月不存在该日时取当月最后一天。
+
+手动加入 Today：
+
+- Plan item 左滑“加入今日”不再直接修改模板，而是创建或复用今天的执行实例。
+- 如果今天已存在该模板实例，则只更新实例内容并保持唯一。
+
+统计归属：
+
+- `PomodoroSession` 关联 Today 执行实例，同时冗余保存 `planTaskID / planTitleSnapshot / todoTitleSnapshot`。
+- 删除任务或计划后，历史统计仍使用快照展示原归属，避免饼图退化为未知 Focus。
 
 ### 6.2 PlanTask
 

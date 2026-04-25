@@ -58,24 +58,9 @@ struct TaskFocusPieIcon: View {
     }
 
     private func sliceStyle(for index: Int) -> AnyShapeStyle {
-        if themeMode == .rainbow {
-            let palette = rainbowPalette
-            return AnyShapeStyle(palette[index % palette.count])
-        }
-
         let base = ThemeTokens.accent(for: themeMode)
         let palette: [Double] = [1.0, 0.78, 0.58, 0.4, 0.26]
         return AnyShapeStyle(base.opacity(palette[index % palette.count]))
-    }
-
-    private var rainbowPalette: [LinearGradient] {
-        [
-            LinearGradient(colors: [Color(hex: "#FF5A7A"), Color(hex: "#FFB15E")], startPoint: .topLeading, endPoint: .bottomTrailing),
-            LinearGradient(colors: [Color(hex: "#FFE66D"), Color(hex: "#7BD88F")], startPoint: .topLeading, endPoint: .bottomTrailing),
-            LinearGradient(colors: [Color(hex: "#5BCBFF"), Color(hex: "#7B61FF")], startPoint: .topLeading, endPoint: .bottomTrailing),
-            LinearGradient(colors: [Color(hex: "#B56CFF"), Color(hex: "#FF7AD9")], startPoint: .topLeading, endPoint: .bottomTrailing),
-            LinearGradient(colors: [Color(hex: "#4DE3C1"), Color(hex: "#6FA8FF")], startPoint: .topLeading, endPoint: .bottomTrailing)
-        ]
     }
 }
 

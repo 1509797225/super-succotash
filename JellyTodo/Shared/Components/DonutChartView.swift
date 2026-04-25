@@ -528,7 +528,7 @@ struct FocusBarChartView: View {
 
 private enum ChartPalette {
     static func colors(for themeMode: AppThemeMode) -> [Color] {
-        switch themeMode {
+        switch themeMode.color {
         case .blackWhite:
             return [
                 Color(hex: "#333333"),
@@ -564,15 +564,6 @@ private enum ChartPalette {
                 Color(hex: "#C5ECCE"),
                 Color(hex: "#DDF5E4"),
                 Color(hex: "#52705A")
-            ]
-        case .rainbow:
-            return [
-                Color(hex: "#FF7A4F"),
-                Color(hex: "#FF9E68"),
-                Color(hex: "#FFC36D"),
-                Color(hex: "#FFDD9B"),
-                Color(hex: "#FFE8C7"),
-                Color(hex: "#80614D")
             ]
         }
     }

@@ -93,9 +93,10 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS todo_items (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
-      plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL,
-      title TEXT NOT NULL,
+	      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+	      plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL,
+	      source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL,
+	      title TEXT NOT NULL,
       note TEXT NOT NULL DEFAULT '',
       is_completed BOOLEAN NOT NULL DEFAULT false,
       is_added_to_today BOOLEAN NOT NULL DEFAULT true,
@@ -115,10 +116,13 @@ export async function initSchema() {
     CREATE TABLE IF NOT EXISTS pomodoro_sessions (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
-      plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL,
-      todo_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL,
-      type TEXT NOT NULL,
+	      device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+	      plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL,
+	      todo_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL,
+	      source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL,
+	      plan_title_snapshot TEXT NOT NULL DEFAULT '',
+	      todo_title_snapshot TEXT NOT NULL DEFAULT '',
+	      type TEXT NOT NULL,
       start_at TIMESTAMPTZ NOT NULL,
       end_at TIMESTAMPTZ NOT NULL,
       duration_seconds INTEGER NOT NULL,
@@ -180,10 +184,14 @@ export async function initSchema() {
 
     ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';
-    ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
-    ALTER TABLE devices ADD COLUMN IF NOT EXISTS auth_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
-    ALTER TABLE devices ADD COLUMN IF NOT EXISTS anonymous_user_id TEXT;
-  `);
+	    ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+	    ALTER TABLE devices ADD COLUMN IF NOT EXISTS auth_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
+	    ALTER TABLE devices ADD COLUMN IF NOT EXISTS anonymous_user_id TEXT;
+	    ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
+	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
+	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS plan_title_snapshot TEXT NOT NULL DEFAULT '';
+	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS todo_title_snapshot TEXT NOT NULL DEFAULT '';
+	  `);
 }
 
 export async function withTransaction(callback) {

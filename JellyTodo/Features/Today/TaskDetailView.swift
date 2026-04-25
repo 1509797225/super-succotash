@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskActionSheet: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.appLanguage) private var language
+    @Environment(\.appTextScale) private var textScale
     @Environment(\.dismiss) private var dismiss
 
     let todo: TodoItem
@@ -29,11 +30,11 @@ struct TaskActionSheet: View {
                 store.updateTodoDetail(
                     id: todo.id,
                     cycle: result.cycle,
-                    dailyDurationMinutes: result.dailyDurationMinutes,
-                    focusTimerDirection: result.focusTimerDirection,
-                    note: latestTodo.note
-                )
-            }
+	                    dailyDurationMinutes: result.dailyDurationMinutes,
+	                    focusTimerDirection: result.focusTimerDirection,
+	                    note: result.note
+	                )
+	            }
         }
     }
 
@@ -46,6 +47,7 @@ struct TaskActionSheet: View {
             VStack(spacing: 22) {
                 Text(todo.title)
                     .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .font(ThemeTokens.Typography.pageTitle(for: textScale))
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .lineLimit(3)
                     .minimumScaleFactor(0.72)
@@ -82,11 +84,11 @@ struct TaskActionSheet: View {
                 }
 
                 Text(L10n.t(.startFocus, language))
-                    .font(ThemeTokens.Typography.body)
+                    .font(ThemeTokens.Typography.body(for: textScale))
             }
             .foregroundStyle(ThemeTokens.Colors.backgroundPrimary)
             .frame(maxWidth: .infinity)
-            .frame(height: ThemeTokens.Metrics.controlHeight)
+            .frame(height: ThemeTokens.Metrics.controlHeight(for: textScale))
             .background(ThemeTokens.Colors.textPrimary)
             .clipShape(Capsule())
         }
@@ -129,8 +131,9 @@ struct TaskActionSheet: View {
                         .foregroundStyle(ThemeTokens.Colors.textSecondary.opacity(0.75))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .frame(height: 132)
-                .padding(.horizontal, 20)
+                        .frame(height: 132)
+                        .frame(height: 132 * textScale.layoutScale)
+                        .padding(.horizontal, 20)
             }
         }
         .buttonStyle(.plain)

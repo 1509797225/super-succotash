@@ -5,6 +5,7 @@ struct TodoEditorResult {
     let cycle: TodoTaskCycle
     let dailyDurationMinutes: Int
     let focusTimerDirection: FocusTimerDirection
+    let note: String
 }
 
 struct TodoEditorSheet: View {
@@ -16,11 +17,13 @@ struct TodoEditorSheet: View {
 
     @Environment(\.appThemeMode) private var themeMode
     @Environment(\.appLanguage) private var language
+    @Environment(\.appTextScale) private var textScale
     @Environment(\.dismiss) private var dismiss
     @State private var text: String
     @State private var cycle: TodoTaskCycle
     @State private var durationText: String
     @State private var focusTimerDirection: FocusTimerDirection
+    @State private var note: String
 
     init(title: String, initialText: String = "", confirmTitle: String, onConfirm: @escaping (String) -> Void) {
         self.title = title
@@ -34,6 +37,7 @@ struct TodoEditorSheet: View {
         _cycle = State(initialValue: .daily)
         _durationText = State(initialValue: "25")
         _focusTimerDirection = State(initialValue: .countDown)
+        _note = State(initialValue: "")
     }
 
     init(
@@ -52,6 +56,7 @@ struct TodoEditorSheet: View {
         _cycle = State(initialValue: .daily)
         _durationText = State(initialValue: "25")
         _focusTimerDirection = State(initialValue: .countDown)
+        _note = State(initialValue: "")
     }
 
     init(title: String, todo: TodoItem, confirmTitle: String, onConfirm: @escaping (TodoEditorResult) -> Void) {
@@ -64,16 +69,17 @@ struct TodoEditorSheet: View {
         _cycle = State(initialValue: todo.cycle)
         _durationText = State(initialValue: "\(todo.dailyDurationMinutes)")
         _focusTimerDirection = State(initialValue: todo.focusTimerDirection)
+        _note = State(initialValue: todo.note)
     }
 
     var body: some View {
         BottomSheetContainer(title: title) {
             VStack(spacing: 18) {
                 TextField(L10n.t(.enterTaskTitle, language), text: $text)
-                    .font(ThemeTokens.Typography.taskTitle)
+                    .font(ThemeTokens.Typography.taskTitle(for: textScale))
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .padding(.horizontal, 20)
-                    .frame(height: ThemeTokens.Metrics.controlHeight)
+                    .frame(height: ThemeTokens.Metrics.controlHeight(for: textScale))
                     .background(ThemeTokens.card(for: themeMode))
                     .clipShape(Capsule())
 
@@ -81,6 +87,7 @@ struct TodoEditorSheet: View {
                     cyclePicker
                     durationField
                     directionPicker
+                    noteField
                 }
 
                 HStack(spacing: 16) {
@@ -95,14 +102,14 @@ struct TodoEditorSheet: View {
                 }
             }
         }
-        .presentationDetents([showsFocusSettings ? .height(620) : .height(280)])
+        .presentationDetents([showsFocusSettings ? .height(720) : .height(280)])
         .presentationDragIndicator(.hidden)
     }
 
     private var cyclePicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.t(.taskCycle, language))
-                .font(ThemeTokens.Typography.caption)
+                .font(ThemeTokens.Typography.caption(for: textScale))
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
@@ -118,7 +125,7 @@ struct TodoEditorSheet: View {
     private var durationField: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.t(.dailyDuration, language))
-                .font(ThemeTokens.Typography.caption)
+                .font(ThemeTokens.Typography.caption(for: textScale))
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
             HStack(spacing: 12) {
@@ -127,7 +134,7 @@ struct TodoEditorSheet: View {
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .multilineTextAlignment(.center)
-                    .frame(height: ThemeTokens.Metrics.controlHeight)
+                    .frame(height: ThemeTokens.Metrics.controlHeight(for: textScale))
                     .background(ThemeTokens.card(for: themeMode))
                     .clipShape(Capsule())
                     .onChange(of: durationText) { newValue in
@@ -135,7 +142,7 @@ struct TodoEditorSheet: View {
                     }
 
                 Text(L10n.t(.minDay, language))
-                    .font(ThemeTokens.Typography.body)
+                    .font(ThemeTokens.Typography.body(for: textScale))
                     .foregroundStyle(ThemeTokens.Colors.textSecondary)
             }
         }
@@ -144,7 +151,7 @@ struct TodoEditorSheet: View {
     private var directionPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(L10n.t(.timerDirection, language))
-                .font(ThemeTokens.Typography.caption)
+                .font(ThemeTokens.Typography.caption(for: textScale))
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
             HStack(spacing: 10) {
@@ -157,13 +164,34 @@ struct TodoEditorSheet: View {
         }
     }
 
+    private var noteField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(language == .english ? "Body" : "正文")
+                .font(ThemeTokens.Typography.caption(for: textScale))
+                .foregroundStyle(ThemeTokens.Colors.textSecondary)
+
+            TextEditor(text: $note)
+                .font(ThemeTokens.Typography.body(for: textScale))
+                .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(height: 96)
+                .background(ThemeTokens.card(for: themeMode))
+                .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+                .onChange(of: note) { newValue in
+                    note = String(newValue.prefix(1_000))
+                }
+        }
+    }
+
     private func optionButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(ThemeTokens.Typography.caption)
+                .font(ThemeTokens.Typography.caption(for: textScale))
                 .foregroundStyle(isSelected ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
                 .frame(maxWidth: .infinity)
-                .frame(height: 48)
+                .frame(height: ThemeTokens.Metrics.controlHeight(for: textScale) - 12)
                 .background(isSelected ? ThemeTokens.accent(for: themeMode) : ThemeTokens.card(for: themeMode))
                 .clipShape(Capsule())
         }
@@ -175,7 +203,8 @@ struct TodoEditorSheet: View {
             title: text,
             cycle: cycle,
             dailyDurationMinutes: min(max(Int(durationText) ?? 25, 5), 480),
-            focusTimerDirection: focusTimerDirection
+            focusTimerDirection: focusTimerDirection,
+            note: note
         )
     }
 }

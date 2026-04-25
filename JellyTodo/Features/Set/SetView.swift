@@ -1,7 +1,156 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 #if APPLE_SIGN_IN_ENABLED
 import AuthenticationServices
 #endif
+
+private struct JellyAppIconOption: Identifiable, Equatable {
+    let id: String
+    let alternateIconName: String?
+    let previewAssetName: String
+    let englishTitle: String
+    let chineseTitle: String
+
+    func title(language: AppLanguage) -> String {
+        language == .chinese ? chineseTitle : englishTitle
+    }
+
+    static let `default` = JellyAppIconOption(
+        id: "default",
+        alternateIconName: nil,
+        previewAssetName: "IconPreviewDefault",
+        englishTitle: "Classic Jelly",
+        chineseTitle: "经典果冻"
+    )
+
+    static let all: [JellyAppIconOption] = [
+        .default,
+        JellyAppIconOption(
+            id: "blush",
+            alternateIconName: "AppIconBlush",
+            previewAssetName: "IconPreviewBlush",
+            englishTitle: "Blush Jelly",
+            chineseTitle: "粉雾果冻"
+        ),
+        JellyAppIconOption(
+            id: "orbit",
+            alternateIconName: "AppIconOrbit",
+            previewAssetName: "IconPreviewOrbit",
+            englishTitle: "Blue Orbit",
+            chineseTitle: "蓝轨果冻"
+        ),
+        JellyAppIconOption(
+            id: "meadow",
+            alternateIconName: "AppIconMeadow",
+            previewAssetName: "IconPreviewMeadow",
+            englishTitle: "Green Meadow",
+            chineseTitle: "青野果冻"
+        ),
+        JellyAppIconOption(
+            id: "graphite",
+            alternateIconName: "AppIconGraphite",
+            previewAssetName: "IconPreviewGraphite",
+            englishTitle: "Graphite Stamp",
+            chineseTitle: "石墨印章"
+        ),
+        JellyAppIconOption(
+            id: "pebble",
+            alternateIconName: "AppIconPebble",
+            previewAssetName: "IconPreviewPebble",
+            englishTitle: "Pebble Mono",
+            chineseTitle: "卵石黑白"
+        ),
+    ]
+
+    static func current(alternateIconName: String?) -> JellyAppIconOption {
+        all.first(where: { $0.alternateIconName == alternateIconName }) ?? .default
+    }
+}
+
+private struct AppIconPickerSheet: View {
+    let selectedIconID: String
+    let onSelect: (JellyAppIconOption) -> Void
+
+    @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 18) {
+                Text(language == .chinese ? "应用图标" : "App Icons")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .padding(.top, 10)
+
+                Text(language == .chinese ? "新增 5 套图标，点击后立即应用。" : "Five new icon styles are ready. Tap to apply instantly.")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+
+                LazyVGrid(columns: columns, spacing: 14) {
+                    ForEach(JellyAppIconOption.all) { option in
+                        Button {
+                            onSelect(option)
+                            dismiss()
+                        } label: {
+                            JellyCard {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Image(option.previewAssetName)
+                                        .resizable()
+                                        .aspectRatio(1, contentMode: .fit)
+                                        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(option.title(language: language))
+                                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                                            .lineLimit(1)
+
+                                        Text(option.alternateIconName == nil ? localized("Default", "默认") : localized("Alternate", "替换"))
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                                    }
+
+                                    HStack {
+                                        Spacer()
+                                        Text(option.id == selectedIconID ? localized("Current", "当前") : localized("Use", "使用"))
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            .foregroundStyle(option.id == selectedIconID ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
+                                            .padding(.horizontal, 10)
+                                            .frame(height: 28)
+                                            .background(option.id == selectedIconID ? ThemeTokens.accent(for: themeMode) : ThemeTokens.card(for: themeMode))
+                                            .clipShape(Capsule())
+                                    }
+                                }
+                                .padding(16)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                CapsuleButton(title: L10n.t(.cancel, language)) {
+                    dismiss()
+                }
+            }
+            .padding(24)
+        }
+        .background(ThemeTokens.background(for: themeMode).ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func localized(_ english: String, _ chinese: String) -> String {
+        language == .chinese ? chinese : english
+    }
+}
 
 private struct ProfileEditorSheet: View {
     let profile: UserProfile
@@ -373,13 +522,16 @@ private struct CloudBackupPointsSheet: View {
 struct SetView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.appLanguage) private var language
+    @Environment(\.appTextScale) private var textScale
     @State private var showingProfileEditor = false
     @State private var showingThemePicker = false
     @State private var showingLanguagePicker = false
+    @State private var showingAppIconPicker = false
     @State private var showingBackupPoints = false
     @State private var showingCloudBackupPoints = false
     @State private var backupPendingRestore: LocalBackupSnapshot?
     @State private var cloudBackupPendingRestore: CloudBackupSnapshot?
+    @State private var selectedAppIconID = JellyAppIconOption.default.id
 #if DEBUG
     @State private var showingMockStagingLogin = false
 #endif
@@ -418,16 +570,24 @@ struct SetView: View {
         .background(settingsBackground.ignoresSafeArea())
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            selectedAppIconID = currentAppIcon.id
+        }
         .sheet(isPresented: $showingProfileEditor) {
             ProfileEditorSheet(profile: store.profile) { profile in
                 store.updateProfile(profile)
             }
         }
+        .sheet(isPresented: $showingAppIconPicker) {
+            AppIconPickerSheet(selectedIconID: selectedAppIconID) { option in
+                applyAppIcon(option)
+            }
+        }
         .confirmationDialog(L10n.t(.theme, language), isPresented: $showingThemePicker, titleVisibility: .visible) {
-            ForEach(AppThemeMode.allCases) { mode in
-                Button(mode.title(language: language)) {
+            ForEach(AppThemeStyle.allCases) { style in
+                Button(style.title(language: language)) {
                     var updated = store.settings
-                    updated.themeMode = mode
+                    updated.themeMode = AppThemeMode.make(color: updated.themeMode.color, style: style)
                     store.updateSettings(updated)
                 }
             }
@@ -524,20 +684,56 @@ struct SetView: View {
         }
     }
 
-    private var settingsBackground: Color {
-        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.backgroundSoft : ThemeTokens.background(for: store.settings.themeMode)
+    @ViewBuilder
+    private var settingsBackground: some View {
+        if store.settings.themeMode.isJelly {
+            let accent = ThemeTokens.accent(for: store.settings.themeMode)
+            let soft = ThemeTokens.accentSoft(for: store.settings.themeMode)
+
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        ThemeTokens.background(for: store.settings.themeMode),
+                        .white,
+                        soft.opacity(0.32)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                Circle()
+                    .fill(accent.opacity(0.16))
+                    .blur(radius: 72)
+                    .frame(width: 240, height: 240)
+                    .offset(x: 160, y: -220)
+
+                Circle()
+                    .fill(.white.opacity(0.94))
+                    .blur(radius: 52)
+                    .frame(width: 220, height: 220)
+                    .offset(x: -130, y: -110)
+
+                RoundedRectangle(cornerRadius: 160, style: .continuous)
+                    .fill(soft.opacity(0.24))
+                    .blur(radius: 48)
+                    .frame(width: 360, height: 260)
+                    .offset(x: -120, y: 240)
+            }
+        } else {
+            store.settings.themeMode.color == .blackWhite && !store.settings.themeMode.isJelly ? ThemeTokens.Colors.backgroundSoft : ThemeTokens.background(for: store.settings.themeMode)
+        }
     }
 
     private var groupBackground: Color {
-        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.card(for: store.settings.themeMode)
+        ThemeTokens.groupBackground(for: store.settings.themeMode)
     }
 
     private var controlBackground: Color {
-        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.card : ThemeTokens.accentSoft(for: store.settings.themeMode)
+        ThemeTokens.controlBackground(for: store.settings.themeMode)
     }
 
     private var iconBackground: Color {
-        store.settings.themeMode == .blackWhite ? ThemeTokens.Colors.subtleLine : ThemeTokens.accentSoft(for: store.settings.themeMode)
+        ThemeTokens.iconBackground(for: store.settings.themeMode)
     }
 
     private var currentAccent: Color {
@@ -572,8 +768,7 @@ struct SetView: View {
             }
             .padding(.horizontal, 20)
             .frame(height: 86)
-            .background(groupBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
         }
         .buttonStyle(.plain)
     }
@@ -607,8 +802,7 @@ struct SetView: View {
             }
             .padding(.horizontal, 14)
             .frame(height: 66)
-            .background(groupBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
         }
         .buttonStyle(.plain)
     }
@@ -704,33 +898,32 @@ struct SetView: View {
 #endif
             }
         }
-        .background(groupBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
     }
 
     private var baseSettingsGroup: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 settingIcon(systemName: "circle.lefthalf.filled")
-                Text(L10n.t(.appearance, language))
+                Text(backupText(english: "Color", chinese: "色彩"))
                     .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
                 Spacer()
 
                 HStack(spacing: 4) {
-                    ForEach([AppThemeMode.blackWhite, .pink, .blue, .green], id: \.id) { mode in
+                    ForEach(AppThemeColor.allCases) { color in
                         Button {
                             var updated = store.settings
-                            updated.themeMode = mode
+                            updated.themeMode = AppThemeMode.make(color: color, style: updated.themeMode.style)
                             store.updateSettings(updated)
                         } label: {
                             Circle()
-                                .fill(ThemeTokens.accent(for: mode))
+                                .fill(ThemeTokens.accent(for: AppThemeMode.make(color: color, style: .solid)))
                                 .frame(width: 24, height: 24)
                                 .overlay(
                                     Circle()
-                                        .stroke(store.settings.themeMode == mode ? currentAccent : Color.clear, lineWidth: 2)
+                                        .stroke(store.settings.themeMode.color == color ? currentAccent : Color.clear, lineWidth: 2)
                                 )
                                 .frame(width: 36, height: 28)
                         }
@@ -752,7 +945,7 @@ struct SetView: View {
                 settingLine(
                     icon: "target",
                     title: L10n.t(.theme, language),
-                    value: store.settings.themeMode.title(language: language),
+                    value: store.settings.themeMode.style.title(language: language),
                     showsChevron: true
                 )
             }
@@ -760,7 +953,18 @@ struct SetView: View {
 
             settingDivider
 
-            settingLine(icon: "app.badge.fill", title: L10n.t(.appIcon, language), badge: "PLUS", showsChevron: true)
+            Button {
+                showingAppIconPicker = true
+            } label: {
+                settingLine(
+                    icon: "app.badge.fill",
+                    title: L10n.t(.appIcon, language),
+                    value: currentAppIcon.title(language: language),
+                    badge: "NEW",
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
 
             settingDivider
 
@@ -838,27 +1042,37 @@ struct SetView: View {
             HStack(spacing: 14) {
                 settingIcon(systemName: "textformat.size")
 
-                Text(L10n.t(.largeText, language))
+                Text(backupText(english: "Text Size", chinese: "字体大小"))
                     .font(settingFont)
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
 
                 Spacer()
 
-                Toggle("", isOn: Binding(
-                    get: { store.settings.useLargeText },
-                    set: { newValue in
-                        var updated = store.settings
-                        updated.useLargeText = newValue
-                        store.updateSettings(updated)
+                HStack(spacing: 4) {
+                    ForEach(AppTextScale.allCases) { scale in
+                        Button {
+                            var updated = store.settings
+                            updated.textScale = scale
+                            store.updateSettings(updated)
+                        } label: {
+                            Text(scale.title(language: language))
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundStyle(store.settings.textScale == scale ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
+                                .frame(width: 34, height: 28)
+                                .background(store.settings.textScale == scale ? currentAccent : Color.clear)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
-                ))
-                .labelsHidden()
-                .tint(currentAccent)
+                }
+                .padding(.horizontal, 6)
+                .frame(height: 34)
+                .background(controlBackground)
+                .clipShape(Capsule())
             }
             .settingRowFrame()
         }
-        .background(groupBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
     }
 
     private var backupSyncGroup: some View {
@@ -978,8 +1192,7 @@ struct SetView: View {
                 value: latestHistoryValue
             )
         }
-        .background(groupBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
     }
 
     private var subscriptionGroup: some View {
@@ -1022,8 +1235,7 @@ struct SetView: View {
             }
             .buttonStyle(.plain)
         }
-        .background(groupBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
     }
 
     private var aboutGroup: some View {
@@ -1032,12 +1244,11 @@ struct SetView: View {
             settingDivider
             settingLine(icon: "number", title: L10n.t(.version, language), value: "1.0")
         }
-        .background(groupBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .glassPanel(themeMode: store.settings.themeMode, cornerRadius: 24)
     }
 
     private var settingFont: Font {
-        .system(size: 18, weight: .bold, design: .rounded)
+        ThemeTokens.Typography.body(for: textScale)
     }
 
     private var accountStatusValue: String {
@@ -1133,9 +1344,17 @@ struct SetView: View {
         return "\(entry.direction.title) · \(entry.status.title)"
     }
 
+    private var currentAppIcon: JellyAppIconOption {
+#if canImport(UIKit)
+        JellyAppIconOption.current(alternateIconName: UIApplication.shared.alternateIconName)
+#else
+        .default
+#endif
+    }
+
     private var settingDivider: some View {
         Rectangle()
-            .fill(iconBackground.opacity(0.75))
+            .fill(store.settings.themeMode.isJelly ? .white.opacity(0.54) : iconBackground.opacity(0.75))
             .frame(height: 1)
             .padding(.leading, 62)
     }
@@ -1224,13 +1443,19 @@ struct SetView: View {
 
     private func settingIcon(systemName: String) -> some View {
         Circle()
-            .fill(iconBackground)
-            .frame(width: 36, height: 36)
+            .fill(store.settings.themeMode.isJelly ? .white.opacity(0.68) : iconBackground)
+            .frame(width: 38, height: 38)
             .overlay(
                 Image(systemName: systemName)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(currentAccent)
             )
+            .overlay(
+                Circle()
+                    .stroke(.white.opacity(store.settings.themeMode.isJelly ? 0.9 : 0), lineWidth: 1.4)
+            )
+            .shadow(color: .white.opacity(store.settings.themeMode.isJelly ? 0.78 : 0), radius: 4, x: -1, y: -1)
+            .shadow(color: .black.opacity(store.settings.themeMode.isJelly ? 0.05 : 0), radius: 10, x: 0, y: 6)
     }
 
     private var initials: String {
@@ -1241,6 +1466,15 @@ struct SetView: View {
     private func backupText(english: String, chinese: String) -> String {
         language == .chinese ? chinese : english
     }
+
+    private func applyAppIcon(_ option: JellyAppIconOption) {
+#if canImport(UIKit)
+        guard UIApplication.shared.supportsAlternateIcons else { return }
+        UIApplication.shared.setAlternateIconName(option.alternateIconName) { _ in
+            selectedAppIconID = JellyAppIconOption.current(alternateIconName: UIApplication.shared.alternateIconName).id
+        }
+#endif
+    }
 }
 
 private extension View {
@@ -1248,6 +1482,60 @@ private extension View {
         self
             .padding(.horizontal, 14)
             .frame(height: 58)
+    }
+
+    @ViewBuilder
+    func glassPanel(themeMode: AppThemeMode, cornerRadius: CGFloat) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+
+        if themeMode.isJelly {
+            self
+                .background(
+                    shape
+                        .fill(.white.opacity(0.58))
+                        .background(
+                            shape.fill(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.74),
+                                        ThemeTokens.accentSoft(for: themeMode).opacity(0.38)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        )
+                        .overlay(
+                            shape.stroke(
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0.98),
+                                        ThemeTokens.accent(for: themeMode).opacity(0.14)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.15
+                            )
+                        )
+                        .overlay(alignment: .top) {
+                            Capsule(style: .continuous)
+                                .fill(.white.opacity(0.84))
+                                .frame(height: 12)
+                                .padding(.horizontal, 26)
+                                .padding(.top, 10)
+                                .blur(radius: 6)
+                        }
+                        .shadow(color: .white.opacity(0.9), radius: 6, x: -2, y: -2)
+                        .shadow(color: ThemeTokens.accent(for: themeMode).opacity(0.08), radius: 16, x: 0, y: 8)
+                        .shadow(color: .black.opacity(0.05), radius: 18, x: 0, y: 12)
+                )
+                .clipShape(shape)
+        } else {
+            self
+                .background(ThemeTokens.groupBackground(for: themeMode))
+                .clipShape(shape)
+        }
     }
 }
 

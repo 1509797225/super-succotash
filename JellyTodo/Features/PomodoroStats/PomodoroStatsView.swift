@@ -3,6 +3,7 @@ import SwiftUI
 struct PomodoroStatsView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.appLanguage) private var language
+    @Environment(\.appTextScale) private var textScale
     let initialRelatedTodoID: UUID?
 
     @State private var range: PomodoroStatsRange = .today
@@ -18,9 +19,9 @@ struct PomodoroStatsView: View {
         let buckets = store.focusTimeBuckets(for: range)
 
         ScrollView {
-            VStack(alignment: .leading, spacing: ThemeTokens.Metrics.sectionSpacing) {
+            VStack(alignment: .leading, spacing: ThemeTokens.Metrics.sectionSpacing(for: textScale)) {
                 Text(L10n.t(.pomodoroStats, language))
-                    .font(ThemeTokens.Typography.pageTitle)
+                    .font(ThemeTokens.Typography.pageTitle(for: textScale))
                     .foregroundStyle(ThemeTokens.Colors.textPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.76)
@@ -32,7 +33,7 @@ struct PomodoroStatsView: View {
                 statsRangeSelector
                     .frame(maxWidth: .infinity)
             }
-            .padding(.horizontal, ThemeTokens.Metrics.horizontalPadding)
+            .padding(.horizontal, ThemeTokens.Metrics.horizontalPadding(for: textScale))
             .padding(.top, 24)
             .padding(.bottom, 32)
         }
@@ -113,7 +114,7 @@ struct PomodoroStatsView: View {
                     .minimumScaleFactor(0.72)
 
                 Text(title)
-                    .font(ThemeTokens.Typography.caption)
+                    .font(ThemeTokens.Typography.caption(for: textScale))
                     .foregroundStyle(ThemeTokens.Colors.textSecondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
@@ -132,6 +133,7 @@ struct PomodoroStatsView: View {
                 } label: {
                     Text(item.title(language: language))
                         .font(ThemeTokens.Typography.body)
+                        .font(ThemeTokens.Typography.body(for: textScale))
                         .foregroundStyle(range == item ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.76)

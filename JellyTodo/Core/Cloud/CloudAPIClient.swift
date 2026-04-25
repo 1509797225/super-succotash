@@ -168,6 +168,7 @@ struct CloudPlan: Decodable, Equatable {
 struct CloudTodoItem: Decodable, Equatable {
     let id: UUID
     let planID: UUID?
+    let sourceTemplateID: UUID?
     let title: String
     let note: String
     let isCompleted: Bool
@@ -183,6 +184,7 @@ struct CloudTodoItem: Decodable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id
         case planID = "plan_id"
+        case sourceTemplateID = "source_template_id"
         case title
         case note
         case isCompleted = "is_completed"
@@ -199,7 +201,11 @@ struct CloudTodoItem: Decodable, Equatable {
 
 struct CloudPomodoroSession: Decodable, Equatable {
     let id: UUID
+    let planID: UUID?
     let todoID: UUID?
+    let sourceTemplateID: UUID?
+    let planTitleSnapshot: String?
+    let todoTitleSnapshot: String?
     let type: PomodoroSessionType
     let startAt: Date
     let endAt: Date
@@ -208,7 +214,11 @@ struct CloudPomodoroSession: Decodable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case id
+        case planID = "plan_id"
         case todoID = "todo_id"
+        case sourceTemplateID = "source_template_id"
+        case planTitleSnapshot = "plan_title_snapshot"
+        case todoTitleSnapshot = "todo_title_snapshot"
         case type
         case startAt = "start_at"
         case endAt = "end_at"
@@ -222,7 +232,7 @@ struct CloudAppSettings: Decodable, Equatable {
     let language: AppLanguage
     let hapticsEnabled: Bool
     let pomodoroGoalPerDay: Int
-    let useLargeText: Bool
+    let textScale: AppTextScale?
     let updatedAt: Date
 
     private enum CodingKeys: String, CodingKey {
@@ -230,8 +240,24 @@ struct CloudAppSettings: Decodable, Equatable {
         case language
         case hapticsEnabled = "haptics_enabled"
         case pomodoroGoalPerDay = "pomodoro_goal_per_day"
+        case textScale = "text_scale"
         case useLargeText = "use_large_text"
         case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        themeMode = try container.decode(AppThemeMode.self, forKey: .themeMode)
+        language = try container.decode(AppLanguage.self, forKey: .language)
+        hapticsEnabled = try container.decode(Bool.self, forKey: .hapticsEnabled)
+        pomodoroGoalPerDay = try container.decode(Int.self, forKey: .pomodoroGoalPerDay)
+        if let scale = try container.decodeIfPresent(AppTextScale.self, forKey: .textScale) {
+            textScale = scale
+        } else {
+            let legacyLarge = try container.decodeIfPresent(Bool.self, forKey: .useLargeText) ?? false
+            textScale = legacyLarge ? .large : .medium
+        }
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }
 

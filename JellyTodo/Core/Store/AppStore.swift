@@ -47,7 +47,7 @@ final class AppStore: ObservableObject {
 
     var preferredColorScheme: ColorScheme? {
         switch settings.themeMode {
-        case .pink, .blackWhite, .blue, .green, .rainbow:
+        case .pink, .blackWhite, .blue, .green, .pinkJelly, .blackWhiteJelly, .blueJelly, .greenJelly:
             return .light
         }
     }
@@ -87,7 +87,7 @@ final class AppStore: ObservableObject {
                 PlanTaskSection(
                     task: task,
                     items: todos
-                        .filter { $0.planTaskID == task.id }
+                        .filter { $0.isPlanTemplate && $0.planTaskID == task.id }
                         .sorted { $0.createdAt < $1.createdAt }
                 )
             }
@@ -132,6 +132,8 @@ final class AppStore: ObservableObject {
             localBackups = appState.localBackups
             pendingUploadCount = appState.pendingUploadCount
             syncGoalIfNeeded()
+            normalizeLegacyPlanTodayItems()
+            materializeTodayOccurrencesIfNeeded()
             savePersistentState()
             await refreshStoreKitEntitlement()
         }
@@ -177,7 +179,8 @@ final class AppStore: ObservableObject {
         to planTaskID: UUID,
         cycle: TodoTaskCycle = .daily,
         dailyDurationMinutes: Int = 25,
-        focusTimerDirection: FocusTimerDirection = .countDown
+        focusTimerDirection: FocusTimerDirection = .countDown,
+        note: String = ""
     ) {
         let trimmed = sanitize(title)
         guard !trimmed.isEmpty else { return }
@@ -187,6 +190,7 @@ final class AppStore: ObservableObject {
         let todo = TodoItem(
             id: UUID(),
             planTaskID: planTaskID,
+            sourceTemplateID: nil,
             isAddedToToday: false,
             title: trimmed,
             isCompleted: false,
@@ -195,7 +199,8 @@ final class AppStore: ObservableObject {
             taskDate: now,
             cycle: cycle,
             dailyDurationMinutes: min(max(dailyDurationMinutes, 5), 480),
-            focusTimerDirection: focusTimerDirection
+            focusTimerDirection: focusTimerDirection,
+            note: sanitizedNote(note)
         )
         todos.append(todo)
         saveTodos()
@@ -211,13 +216,34 @@ final class AppStore: ObservableObject {
     }
 
     func addTodoToToday(id: UUID) {
-        guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
-        todos[index].isAddedToToday = true
-        todos[index].taskDate = Date()
-        todos[index].updatedAt = Date()
+        guard let template = todos.first(where: { $0.id == id }) else { return }
+        let result = upsertTodayOccurrence(from: template, now: Date())
         triggerHaptic()
         saveTodos()
-        logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
+        logCloudChange(entityType: "todo_item", entityID: result.todo.id.uuidString, operation: result.operation, payload: result.todo)
+    }
+
+    func prepareFocusTodoID(for id: UUID) -> UUID {
+        guard let todo = todos.first(where: { $0.id == id }) else { return id }
+        guard todo.isPlanTemplate else { return id }
+        let result = upsertTodayOccurrence(from: todo, now: Date())
+        saveTodos()
+        logCloudChange(entityType: "todo_item", entityID: result.todo.id.uuidString, operation: result.operation, payload: result.todo)
+        return result.todo.id
+    }
+
+    func materializeTodayOccurrencesIfNeeded() {
+        let now = Date()
+        var generatedResults: [(todo: TodoItem, operation: String)] = []
+        for template in todos.filter(\.isPlanTemplate) where shouldMaterialize(template, on: now) {
+            generatedResults.append(upsertTodayOccurrence(from: template, now: now))
+        }
+
+        guard !generatedResults.isEmpty else { return }
+        saveTodos()
+        for result in generatedResults {
+            logCloudChange(entityType: "todo_item", entityID: result.todo.id.uuidString, operation: result.operation, payload: result.todo)
+        }
     }
 
     func updateTodo(id: UUID, title: String) {
@@ -320,13 +346,18 @@ final class AppStore: ObservableObject {
         timerCancellable?.cancel()
 
         let now = Date()
+        let sessionSnapshot = pomodoroSessionSnapshot(for: timerState.relatedTodoID)
         let session = PomodoroSession(
             id: UUID(),
             type: timerState.mode.sessionType,
             startAt: timerState.startedAt ?? now.addingTimeInterval(TimeInterval(-timerState.totalSeconds)),
             endAt: now,
-            durationSeconds: timerState.totalSeconds,
-            relatedTodoID: timerState.relatedTodoID
+            durationSeconds: max(timerState.elapsedSeconds, 1),
+            relatedTodoID: timerState.relatedTodoID,
+            sourceTemplateID: sessionSnapshot?.sourceTemplateID,
+            planTaskID: sessionSnapshot?.planTaskID,
+            planTitleSnapshot: sessionSnapshot?.planTitle ?? "",
+            todoTitleSnapshot: sessionSnapshot?.todoTitle ?? ""
         )
 
         pomodoroSessions.append(session)
@@ -904,8 +935,12 @@ final class AppStore: ObservableObject {
     }
 
     func focusSegments(for range: PomodoroStatsRange) -> [PlanFocusSegment] {
-        let focusSessions = sessions(in: range).filter { $0.type == .focus && $0.relatedTodoID != nil }
+        let focusSessions = sessions(in: range).filter { $0.type == .focus }
         let grouped = Dictionary(grouping: focusSessions) { session -> UUID in
+            if let planTaskID = session.planTaskID {
+                return planTaskID
+            }
+
             guard let todoID = session.relatedTodoID,
                   let todo = todos.first(where: { $0.id == todoID })
             else { return UUID(uuidString: "00000000-0000-0000-0000-000000000000")! }
@@ -920,10 +955,12 @@ final class AppStore: ObservableObject {
             let relatedTodos = sessions.compactMap { session in
                 session.relatedTodoID.flatMap { id in todos.first(where: { $0.id == id }) }
             }
-            let title = planTasks.first(where: { $0.id == key })?.title
+            let title = sessions.first(where: { !$0.planTitleSnapshot.isEmpty })?.planTitleSnapshot
+                ?? planTasks.first(where: { $0.id == key })?.title
+                ?? sessions.first(where: { !$0.todoTitleSnapshot.isEmpty })?.todoTitleSnapshot
                 ?? relatedTodos.first?.title
                 ?? "Focus"
-            let itemCount = Set(relatedTodos.map(\.id)).count
+            let itemCount = max(Set(sessions.compactMap(\.sourceTemplateID)).count, Set(relatedTodos.map(\.id)).count)
 
             return PlanFocusSegment(id: key, title: title, seconds: seconds, itemCount: itemCount)
         }
@@ -976,8 +1013,12 @@ final class AppStore: ObservableObject {
     }
 
     func focusedSeconds(for todoID: UUID) -> Int {
-        pomodoroSessions
-            .filter { $0.type == .focus && $0.relatedTodoID == todoID }
+        let templateID = todos.first(where: { $0.id == todoID })?.isPlanTemplate == true ? todoID : nil
+        return pomodoroSessions
+            .filter {
+                $0.type == .focus
+                    && ($0.relatedTodoID == todoID || (templateID != nil && $0.sourceTemplateID == templateID))
+            }
             .reduce(0) { $0 + $1.durationSeconds }
     }
 
@@ -1211,9 +1252,10 @@ final class AppStore: ObservableObject {
             .filter { $0.deletedAt == nil }
             .map {
                 TodoItem(
-                    id: $0.id,
-                    planTaskID: $0.planID,
-                    isAddedToToday: $0.isAddedToToday,
+	                    id: $0.id,
+	                    planTaskID: $0.planID,
+	                    sourceTemplateID: $0.sourceTemplateID,
+	                    isAddedToToday: $0.isAddedToToday,
                     title: $0.title,
                     isCompleted: $0.isCompleted,
                     createdAt: $0.createdAt,
@@ -1237,10 +1279,14 @@ final class AppStore: ObservableObject {
                     id: $0.id,
                     type: $0.type,
                     startAt: $0.startAt,
-                    endAt: $0.endAt,
-                    durationSeconds: $0.durationSeconds,
-                    relatedTodoID: $0.todoID
-                )
+	                    endAt: $0.endAt,
+	                    durationSeconds: $0.durationSeconds,
+	                    relatedTodoID: $0.todoID,
+	                    sourceTemplateID: $0.sourceTemplateID,
+	                    planTaskID: $0.planID,
+	                    planTitleSnapshot: $0.planTitleSnapshot ?? "",
+	                    todoTitleSnapshot: $0.todoTitleSnapshot ?? ""
+	                )
             }
 
         planTasks.append(contentsOf: cloudPlans)
@@ -1292,9 +1338,10 @@ final class AppStore: ObservableObject {
             }
 
             let merged = TodoItem(
-                id: cloudTodo.id,
-                planTaskID: cloudTodo.planID,
-                isAddedToToday: cloudTodo.isAddedToToday,
+	                id: cloudTodo.id,
+	                planTaskID: cloudTodo.planID,
+	                sourceTemplateID: cloudTodo.sourceTemplateID,
+	                isAddedToToday: cloudTodo.isAddedToToday,
                 title: cloudTodo.title,
                 isCompleted: cloudTodo.isCompleted,
                 createdAt: cloudTodo.createdAt,
@@ -1330,10 +1377,14 @@ final class AppStore: ObservableObject {
                 id: cloudSession.id,
                 type: cloudSession.type,
                 startAt: cloudSession.startAt,
-                endAt: cloudSession.endAt,
-                durationSeconds: cloudSession.durationSeconds,
-                relatedTodoID: cloudSession.todoID
-            )
+	                endAt: cloudSession.endAt,
+	                durationSeconds: cloudSession.durationSeconds,
+	                relatedTodoID: cloudSession.todoID,
+	                sourceTemplateID: cloudSession.sourceTemplateID,
+	                planTaskID: cloudSession.planID,
+	                planTitleSnapshot: cloudSession.planTitleSnapshot ?? "",
+	                todoTitleSnapshot: cloudSession.todoTitleSnapshot ?? ""
+	            )
 
             if !pomodoroSessions.contains(where: { $0.id == cloudSession.id }) {
                 pomodoroSessions.append(merged)
@@ -1346,7 +1397,7 @@ final class AppStore: ObservableObject {
                 themeMode: cloudSettings.themeMode,
                 hapticsEnabled: cloudSettings.hapticsEnabled,
                 pomodoroGoalPerDay: cloudSettings.pomodoroGoalPerDay,
-                useLargeText: cloudSettings.useLargeText,
+                textScale: cloudSettings.textScale ?? settings.textScale,
                 language: cloudSettings.language
             )
             if settings != merged {
@@ -1452,6 +1503,126 @@ final class AppStore: ObservableObject {
         if profile.dailyGoal != settings.pomodoroGoalPerDay {
             profile.dailyGoal = settings.pomodoroGoalPerDay
         }
+    }
+
+    private func normalizeLegacyPlanTodayItems() {
+        var createdTemplates: [TodoItem] = []
+        for index in todos.indices {
+            guard todos[index].planTaskID != nil,
+                  todos[index].sourceTemplateID == nil,
+                  todos[index].isAddedToToday
+            else { continue }
+
+            let occurrence = todos[index]
+            let template = TodoItem(
+                id: UUID(),
+                planTaskID: occurrence.planTaskID,
+                sourceTemplateID: nil,
+                isAddedToToday: false,
+                title: occurrence.title,
+                isCompleted: false,
+                createdAt: occurrence.createdAt,
+                updatedAt: Date(),
+                taskDate: occurrence.taskDate,
+                cycle: occurrence.cycle,
+                dailyDurationMinutes: occurrence.dailyDurationMinutes,
+                focusTimerDirection: occurrence.focusTimerDirection,
+                note: occurrence.note
+            )
+            createdTemplates.append(template)
+            todos[index].sourceTemplateID = template.id
+            todos[index].updatedAt = Date()
+        }
+
+        if !createdTemplates.isEmpty {
+            todos.append(contentsOf: createdTemplates)
+        }
+    }
+
+    private func shouldMaterialize(_ template: TodoItem, on date: Date) -> Bool {
+        guard template.isPlanTemplate else { return false }
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        let hasOccurrenceToday = todos.contains {
+            $0.sourceTemplateID == template.id && calendar.isDate($0.taskDate, inSameDayAs: day)
+        }
+        guard !hasOccurrenceToday else { return false }
+
+        switch template.cycle {
+        case .manual:
+            return false
+        case .once:
+            return !todos.contains { $0.sourceTemplateID == template.id }
+        case .daily:
+            return template.taskDate <= date
+        case .weekly:
+            return template.taskDate <= date
+                && calendar.component(.weekday, from: template.taskDate) == calendar.component(.weekday, from: date)
+        case .monthly:
+            return template.taskDate <= date && isMonthlyDue(template.taskDate, on: date)
+        }
+    }
+
+    private func isMonthlyDue(_ templateDate: Date, on date: Date) -> Bool {
+        let calendar = Calendar.current
+        let templateDay = calendar.component(.day, from: templateDate)
+        let currentDay = calendar.component(.day, from: date)
+        let lastDay = calendar.range(of: .day, in: .month, for: date)?.upperBound.advanced(by: -1) ?? currentDay
+        return currentDay == min(templateDay, lastDay)
+    }
+
+    private func upsertTodayOccurrence(
+        from template: TodoItem,
+        now: Date
+    ) -> (todo: TodoItem, operation: String) {
+        let calendar = Calendar.current
+        if let existingIndex = todos.firstIndex(where: {
+            $0.sourceTemplateID == template.id && calendar.isDateInToday($0.taskDate)
+        }) {
+            todos[existingIndex].title = template.title
+            todos[existingIndex].cycle = template.cycle
+            todos[existingIndex].dailyDurationMinutes = template.dailyDurationMinutes
+            todos[existingIndex].focusTimerDirection = template.focusTimerDirection
+            todos[existingIndex].note = template.note
+            todos[existingIndex].planTaskID = template.planTaskID
+            todos[existingIndex].isAddedToToday = true
+            todos[existingIndex].updatedAt = now
+            return (todos[existingIndex], "update")
+        }
+
+        let occurrence = TodoItem(
+            id: UUID(),
+            planTaskID: template.planTaskID,
+            sourceTemplateID: template.id,
+            isAddedToToday: true,
+            title: template.title,
+            isCompleted: false,
+            createdAt: now,
+            updatedAt: now,
+            taskDate: calendar.startOfDay(for: now),
+            cycle: template.cycle,
+            dailyDurationMinutes: template.dailyDurationMinutes,
+            focusTimerDirection: template.focusTimerDirection,
+            note: template.note
+        )
+        todos.append(occurrence)
+        return (occurrence, "create")
+    }
+
+    private func sanitizedNote(_ note: String) -> String {
+        String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
+    }
+
+    private func pomodoroSessionSnapshot(for todoID: UUID?) -> (sourceTemplateID: UUID?, planTaskID: UUID?, planTitle: String, todoTitle: String)? {
+        guard let todoID, let todo = todos.first(where: { $0.id == todoID }) else { return nil }
+        let plan = todo.planTaskID.flatMap { planID in planTasks.first(where: { $0.id == planID }) }
+        let template = todo.sourceTemplateID.flatMap { templateID in todos.first(where: { $0.id == templateID }) }
+        return (
+            sourceTemplateID: todo.sourceTemplateID,
+            planTaskID: todo.planTaskID,
+            planTitle: plan?.title ?? "",
+            todoTitle: template?.title ?? todo.title
+        )
     }
 
     private func sanitize(_ title: String) -> String {

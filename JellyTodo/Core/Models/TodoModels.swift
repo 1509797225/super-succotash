@@ -1,6 +1,7 @@
 import Foundation
 
 enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
+    case manual
     case once
     case daily
     case weekly
@@ -10,6 +11,8 @@ enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
+        case .manual:
+            return "Manual"
         case .once:
             return "Once"
         case .daily:
@@ -27,6 +30,8 @@ enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
             return title
         case .chinese:
             switch self {
+            case .manual:
+                return "手动"
             case .once:
                 return "一次"
             case .daily:
@@ -96,6 +101,7 @@ enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
 struct TodoItem: Identifiable, Codable, Equatable {
     let id: UUID
     var planTaskID: UUID?
+    var sourceTemplateID: UUID?
     var isAddedToToday: Bool
     var title: String
     var isCompleted: Bool
@@ -110,6 +116,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     init(
         id: UUID,
         planTaskID: UUID? = nil,
+        sourceTemplateID: UUID? = nil,
         isAddedToToday: Bool = true,
         title: String,
         isCompleted: Bool,
@@ -123,6 +130,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     ) {
         self.id = id
         self.planTaskID = planTaskID
+        self.sourceTemplateID = sourceTemplateID
         self.isAddedToToday = isAddedToToday
         self.title = title
         self.isCompleted = isCompleted
@@ -138,6 +146,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id
         case planTaskID
+        case sourceTemplateID
         case isAddedToToday
         case title
         case isCompleted
@@ -154,6 +163,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(UUID.self, forKey: .id)
         planTaskID = try container.decodeIfPresent(UUID.self, forKey: .planTaskID)
+        sourceTemplateID = try container.decodeIfPresent(UUID.self, forKey: .sourceTemplateID)
         isAddedToToday = try container.decodeIfPresent(Bool.self, forKey: .isAddedToToday) ?? true
         title = try container.decode(String.self, forKey: .title)
         isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
@@ -164,6 +174,16 @@ struct TodoItem: Identifiable, Codable, Equatable {
         dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
         focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+    }
+}
+
+extension TodoItem {
+    var isPlanTemplate: Bool {
+        planTaskID != nil && sourceTemplateID == nil && !isAddedToToday
+    }
+
+    var isTodayOccurrence: Bool {
+        sourceTemplateID != nil && isAddedToToday
     }
 }
 
@@ -234,6 +254,61 @@ struct PomodoroSession: Identifiable, Codable, Equatable {
     let endAt: Date
     let durationSeconds: Int
     let relatedTodoID: UUID?
+    let sourceTemplateID: UUID?
+    let planTaskID: UUID?
+    let planTitleSnapshot: String
+    let todoTitleSnapshot: String
+
+    init(
+        id: UUID,
+        type: PomodoroSessionType,
+        startAt: Date,
+        endAt: Date,
+        durationSeconds: Int,
+        relatedTodoID: UUID?,
+        sourceTemplateID: UUID? = nil,
+        planTaskID: UUID? = nil,
+        planTitleSnapshot: String = "",
+        todoTitleSnapshot: String = ""
+    ) {
+        self.id = id
+        self.type = type
+        self.startAt = startAt
+        self.endAt = endAt
+        self.durationSeconds = durationSeconds
+        self.relatedTodoID = relatedTodoID
+        self.sourceTemplateID = sourceTemplateID
+        self.planTaskID = planTaskID
+        self.planTitleSnapshot = planTitleSnapshot
+        self.todoTitleSnapshot = todoTitleSnapshot
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case type
+        case startAt
+        case endAt
+        case durationSeconds
+        case relatedTodoID
+        case sourceTemplateID
+        case planTaskID
+        case planTitleSnapshot
+        case todoTitleSnapshot
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        type = try container.decode(PomodoroSessionType.self, forKey: .type)
+        startAt = try container.decode(Date.self, forKey: .startAt)
+        endAt = try container.decode(Date.self, forKey: .endAt)
+        durationSeconds = try container.decode(Int.self, forKey: .durationSeconds)
+        relatedTodoID = try container.decodeIfPresent(UUID.self, forKey: .relatedTodoID)
+        sourceTemplateID = try container.decodeIfPresent(UUID.self, forKey: .sourceTemplateID)
+        planTaskID = try container.decodeIfPresent(UUID.self, forKey: .planTaskID)
+        planTitleSnapshot = try container.decodeIfPresent(String.self, forKey: .planTitleSnapshot) ?? ""
+        todoTitleSnapshot = try container.decodeIfPresent(String.self, forKey: .todoTitleSnapshot) ?? ""
+    }
 }
 
 struct UserProfile: Codable, Equatable {
@@ -244,12 +319,11 @@ struct UserProfile: Codable, Equatable {
     static let `default` = UserProfile(nickname: "", signature: "", dailyGoal: 4)
 }
 
-enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
+enum AppThemeColor: String, Codable, CaseIterable, Identifiable {
     case pink
     case blackWhite = "pureWhite"
     case blue
     case green
-    case rainbow
 
     var id: String { rawValue }
 
@@ -263,8 +337,6 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
             return "Blue"
         case .green:
             return "Green"
-        case .rainbow:
-            return "Rainbow"
         }
     }
 
@@ -282,9 +354,105 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
                 return "蓝色"
             case .green:
                 return "绿色"
-            case .rainbow:
-                return "彩虹"
             }
+        }
+    }
+}
+
+enum AppThemeStyle: String, Codable, CaseIterable, Identifiable {
+    case solid
+    case jelly
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .solid:
+            return "Solid"
+        case .jelly:
+            return "Jelly"
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .solid:
+                return "素色"
+            case .jelly:
+                return "果冻"
+            }
+        }
+    }
+}
+
+enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
+    case pink
+    case blackWhite = "pureWhite"
+    case blue
+    case green
+    case pinkJelly
+    case blackWhiteJelly
+    case blueJelly
+    case greenJelly
+
+    var id: String { rawValue }
+
+    var title: String {
+        "\(color.title) \(style.title)"
+    }
+
+    func title(language: AppLanguage) -> String {
+        "\(color.title(language: language)) · \(style.title(language: language))"
+    }
+
+    var color: AppThemeColor {
+        switch self {
+        case .pink, .pinkJelly:
+            return .pink
+        case .blackWhite, .blackWhiteJelly:
+            return .blackWhite
+        case .blue, .blueJelly:
+            return .blue
+        case .green, .greenJelly:
+            return .green
+        }
+    }
+
+    var style: AppThemeStyle {
+        switch self {
+        case .pink, .blackWhite, .blue, .green:
+            return .solid
+        case .pinkJelly, .blackWhiteJelly, .blueJelly, .greenJelly:
+            return .jelly
+        }
+    }
+
+    var isJelly: Bool {
+        style == .jelly
+    }
+
+    static func make(color: AppThemeColor, style: AppThemeStyle) -> AppThemeMode {
+        switch (color, style) {
+        case (.pink, .solid):
+            return .pink
+        case (.pink, .jelly):
+            return .pinkJelly
+        case (.blackWhite, .solid):
+            return .blackWhite
+        case (.blackWhite, .jelly):
+            return .blackWhiteJelly
+        case (.blue, .solid):
+            return .blue
+        case (.blue, .jelly):
+            return .blueJelly
+        case (.green, .solid):
+            return .green
+        case (.green, .jelly):
+            return .greenJelly
         }
     }
 
@@ -299,10 +467,18 @@ enum AppThemeMode: String, Codable, CaseIterable, Identifiable {
             self = .blue
         case Self.green.rawValue:
             self = .green
-        case Self.rainbow.rawValue:
-            self = .rainbow
+        case Self.pinkJelly.rawValue:
+            self = .pinkJelly
+        case Self.blackWhiteJelly.rawValue:
+            self = .blackWhiteJelly
+        case Self.blueJelly.rawValue:
+            self = .blueJelly
+        case Self.greenJelly.rawValue:
+            self = .greenJelly
         case Self.blackWhite.rawValue, "softGray", "followSystem":
             self = .blackWhite
+        case "rainbow":
+            self = .pink
         default:
             self = .blackWhite
         }
@@ -332,18 +508,75 @@ enum AppLanguage: String, Codable, CaseIterable, Identifiable {
     var localeIdentifier: String { rawValue }
 }
 
+enum AppTextScale: String, Codable, CaseIterable, Identifiable {
+    case small
+    case medium
+    case large
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .small:
+            return "Small"
+        case .medium:
+            return "Medium"
+        case .large:
+            return "Large"
+        }
+    }
+
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            return title
+        case .chinese:
+            switch self {
+            case .small:
+                return "小"
+            case .medium:
+                return "中"
+            case .large:
+                return "大"
+            }
+        }
+    }
+
+    var typographyScale: CGFloat {
+        switch self {
+        case .small:
+            return 0.9
+        case .medium:
+            return 1.0
+        case .large:
+            return 1.12
+        }
+    }
+
+    var layoutScale: CGFloat {
+        switch self {
+        case .small:
+            return 0.94
+        case .medium:
+            return 1.0
+        case .large:
+            return 1.1
+        }
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var themeMode: AppThemeMode
     var hapticsEnabled: Bool
     var pomodoroGoalPerDay: Int
-    var useLargeText: Bool
+    var textScale: AppTextScale
     var language: AppLanguage
 
     static let `default` = AppSettings(
         themeMode: .blackWhite,
         hapticsEnabled: true,
         pomodoroGoalPerDay: 4,
-        useLargeText: true,
+        textScale: .medium,
         language: .english
     )
 
@@ -351,6 +584,7 @@ struct AppSettings: Codable, Equatable {
         case themeMode
         case hapticsEnabled
         case pomodoroGoalPerDay
+        case textScale
         case useLargeText
         case language
     }
@@ -359,13 +593,13 @@ struct AppSettings: Codable, Equatable {
         themeMode: AppThemeMode,
         hapticsEnabled: Bool,
         pomodoroGoalPerDay: Int,
-        useLargeText: Bool,
+        textScale: AppTextScale,
         language: AppLanguage
     ) {
         self.themeMode = themeMode
         self.hapticsEnabled = hapticsEnabled
         self.pomodoroGoalPerDay = pomodoroGoalPerDay
-        self.useLargeText = useLargeText
+        self.textScale = textScale
         self.language = language
     }
 
@@ -374,8 +608,23 @@ struct AppSettings: Codable, Equatable {
         themeMode = try container.decodeIfPresent(AppThemeMode.self, forKey: .themeMode) ?? .blackWhite
         hapticsEnabled = try container.decodeIfPresent(Bool.self, forKey: .hapticsEnabled) ?? true
         pomodoroGoalPerDay = try container.decodeIfPresent(Int.self, forKey: .pomodoroGoalPerDay) ?? 4
-        useLargeText = try container.decodeIfPresent(Bool.self, forKey: .useLargeText) ?? true
+        if let decodedScale = try container.decodeIfPresent(AppTextScale.self, forKey: .textScale) {
+            textScale = decodedScale
+        } else {
+            let legacyLarge = try container.decodeIfPresent(Bool.self, forKey: .useLargeText) ?? true
+            textScale = legacyLarge ? .large : .medium
+        }
         language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .english
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(themeMode, forKey: .themeMode)
+        try container.encode(hapticsEnabled, forKey: .hapticsEnabled)
+        try container.encode(pomodoroGoalPerDay, forKey: .pomodoroGoalPerDay)
+        try container.encode(textScale, forKey: .textScale)
+        try container.encode(textScale == .large, forKey: .useLargeText)
+        try container.encode(language, forKey: .language)
     }
 }
 
@@ -662,6 +911,11 @@ struct PlanTaskSection: Identifiable, Equatable {
     var id: UUID { task.id }
     let task: PlanTask
     let items: [TodoItem]
+}
+
+struct PlanItemTodayState: Equatable {
+    let occurrence: TodoItem?
+    let isCompleted: Bool
 }
 
 struct PomodoroTimerState: Equatable {

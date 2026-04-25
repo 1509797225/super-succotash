@@ -8,6 +8,10 @@ private struct AppLanguageKey: EnvironmentKey {
     static let defaultValue: AppLanguage = .english
 }
 
+private struct AppTextScaleKey: EnvironmentKey {
+    static let defaultValue: AppTextScale = .medium
+}
+
 extension EnvironmentValues {
     var appThemeMode: AppThemeMode {
         get { self[AppThemeModeKey.self] }
@@ -17,6 +21,11 @@ extension EnvironmentValues {
     var appLanguage: AppLanguage {
         get { self[AppLanguageKey.self] }
         set { self[AppLanguageKey.self] = newValue }
+    }
+
+    var appTextScale: AppTextScale {
+        get { self[AppTextScaleKey.self] }
+        set { self[AppTextScaleKey.self] = newValue }
     }
 }
 
@@ -275,6 +284,7 @@ enum ThemeTokens {
         let card: Color
         let accent: Color
         let accentSoft: Color
+        let glassTint: Color
     }
 
     enum Colors {
@@ -287,22 +297,109 @@ enum ThemeTokens {
     }
 
     enum Metrics {
-        static let horizontalPadding: CGFloat = 16
-        static let sectionSpacing: CGFloat = 24
-        static let cardSpacing: CGFloat = 20
-        static let cardHeight: CGFloat = 100
-        static let controlHeight: CGFloat = 60
+        static let horizontalPadding = horizontalPadding(for: .medium)
+        static let sectionSpacing = sectionSpacing(for: .medium)
+        static let cardSpacing = cardSpacing(for: .medium)
+        static let cardHeight = cardHeight(for: .medium)
+        static let controlHeight = controlHeight(for: .medium)
         static let cornerRadius: CGFloat = 32
+
+        static func horizontalPadding(for scale: AppTextScale) -> CGFloat {
+            switch scale {
+            case .small:
+                return 14
+            case .medium:
+                return 16
+            case .large:
+                return 18
+            }
+        }
+
+        static func sectionSpacing(for scale: AppTextScale) -> CGFloat {
+            switch scale {
+            case .small:
+                return 20
+            case .medium:
+                return 24
+            case .large:
+                return 28
+            }
+        }
+
+        static func cardSpacing(for scale: AppTextScale) -> CGFloat {
+            switch scale {
+            case .small:
+                return 16
+            case .medium:
+                return 20
+            case .large:
+                return 22
+            }
+        }
+
+        static func cardHeight(for scale: AppTextScale) -> CGFloat {
+            switch scale {
+            case .small:
+                return 88
+            case .medium:
+                return 100
+            case .large:
+                return 114
+            }
+        }
+
+        static func controlHeight(for scale: AppTextScale) -> CGFloat {
+            switch scale {
+            case .small:
+                return 54
+            case .medium:
+                return 60
+            case .large:
+                return 68
+            }
+        }
     }
 
     enum Typography {
-        static let pageTitle = Font.system(size: 40, weight: .bold, design: .rounded)
-        static let largeStat = Font.system(size: 32, weight: .bold, design: .rounded)
-        static let taskTitle = Font.system(size: 28, weight: .bold, design: .rounded)
-        static let sectionTitle = Font.system(size: 24, weight: .bold, design: .rounded)
-        static let tabLabel = Font.system(size: 20, weight: .bold, design: .rounded)
-        static let body = Font.system(size: 20, weight: .bold, design: .rounded)
-        static let caption = Font.system(size: 18, weight: .bold, design: .rounded)
+        static let pageTitle = pageTitle(for: .medium)
+        static let largeStat = largeStat(for: .medium)
+        static let taskTitle = taskTitle(for: .medium)
+        static let sectionTitle = sectionTitle(for: .medium)
+        static let tabLabel = tabLabel(for: .medium)
+        static let body = body(for: .medium)
+        static let caption = caption(for: .medium)
+
+        static func pageTitle(for scale: AppTextScale) -> Font {
+            sized(40, scale: scale)
+        }
+
+        static func largeStat(for scale: AppTextScale) -> Font {
+            sized(32, scale: scale)
+        }
+
+        static func taskTitle(for scale: AppTextScale) -> Font {
+            sized(28, scale: scale)
+        }
+
+        static func sectionTitle(for scale: AppTextScale) -> Font {
+            sized(24, scale: scale)
+        }
+
+        static func tabLabel(for scale: AppTextScale) -> Font {
+            sized(20, scale: scale)
+        }
+
+        static func body(for scale: AppTextScale) -> Font {
+            sized(20, scale: scale)
+        }
+
+        static func caption(for scale: AppTextScale) -> Font {
+            sized(18, scale: scale)
+        }
+
+        private static func sized(_ base: CGFloat, scale: AppTextScale) -> Font {
+            .system(size: base * scale.typographyScale, weight: .bold, design: .rounded)
+        }
     }
 
     static func background(for mode: AppThemeMode) -> Color {
@@ -322,42 +419,76 @@ enum ThemeTokens {
     }
 
     static func palette(for mode: AppThemeMode) -> Palette {
-        switch mode {
+        switch mode.color {
         case .pink:
             return Palette(
                 background: Color(hex: "#FFF8FA"),
                 card: Color(hex: "#FFF0F4"),
                 accent: Color(hex: "#F58BA8"),
-                accentSoft: Color(hex: "#FFDDE7")
+                accentSoft: Color(hex: "#FFDDE7"),
+                glassTint: Color(hex: "#FFF4F7")
             )
         case .blackWhite:
             return Palette(
                 background: Colors.backgroundPrimary,
                 card: Colors.card,
                 accent: Colors.textPrimary,
-                accentSoft: Colors.subtleLine
+                accentSoft: Colors.subtleLine,
+                glassTint: Color(hex: "#FCFCFD")
             )
         case .blue:
             return Palette(
                 background: Color(hex: "#F7FBFF"),
                 card: Color(hex: "#EEF6FF"),
                 accent: Color(hex: "#78AEEA"),
-                accentSoft: Color(hex: "#DCEEFF")
+                accentSoft: Color(hex: "#DCEEFF"),
+                glassTint: Color(hex: "#F4FAFF")
             )
         case .green:
             return Palette(
                 background: Color(hex: "#F8FFF9"),
                 card: Color(hex: "#EEFAF1"),
                 accent: Color(hex: "#7BCB91"),
-                accentSoft: Color(hex: "#DDF5E4")
-            )
-        case .rainbow:
-            return Palette(
-                background: Color(hex: "#FFFDF7"),
-                card: Color(hex: "#FFF7EE"),
-                accent: Color(hex: "#FF8A5B"),
-                accentSoft: Color(hex: "#FFE8C7")
+                accentSoft: Color(hex: "#DDF5E4"),
+                glassTint: Color(hex: "#F4FFF6")
             )
         }
+    }
+
+    static func glassFill(for mode: AppThemeMode) -> LinearGradient {
+        let palette = palette(for: mode)
+        let topOpacity = mode.isJelly ? 0.92 : 1
+        let bottomOpacity = mode.isJelly ? 0.74 : 1
+        return LinearGradient(
+            colors: [
+                palette.glassTint.opacity(topOpacity),
+                palette.card.opacity(bottomOpacity)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static func glassStroke(for mode: AppThemeMode) -> LinearGradient {
+        LinearGradient(
+            colors: [
+                .white.opacity(mode.isJelly ? 0.95 : 0.5),
+                palette(for: mode).accent.opacity(mode.isJelly ? 0.16 : 0.08)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    static func groupBackground(for mode: AppThemeMode) -> Color {
+        mode.color == .blackWhite && !mode.isJelly ? Colors.backgroundPrimary : card(for: mode)
+    }
+
+    static func controlBackground(for mode: AppThemeMode) -> Color {
+        mode.color == .blackWhite && !mode.isJelly ? Colors.card : accentSoft(for: mode)
+    }
+
+    static func iconBackground(for mode: AppThemeMode) -> Color {
+        mode.color == .blackWhite && !mode.isJelly ? Colors.subtleLine : accentSoft(for: mode)
     }
 }

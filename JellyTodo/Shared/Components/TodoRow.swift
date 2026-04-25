@@ -11,6 +11,7 @@ struct TodoRow: View {
     var onSwipeComplete: (() -> Void)? = nil
 
     @Environment(\.appLanguage) private var language
+    @Environment(\.appTextScale) private var textScale
 
     @State private var settledFillWidth: CGFloat = 0
     @State private var actionReveal: CGFloat = 0
@@ -39,9 +40,9 @@ struct TodoRow: View {
                     .offset(x: -actionReveal)
                     .animation(.easeOut(duration: 0.18), value: actionReveal)
             }
-            .frame(width: rowWidth, height: ThemeTokens.Metrics.cardHeight)
+            .frame(width: rowWidth, height: ThemeTokens.Metrics.cardHeight(for: textScale))
         }
-        .frame(height: ThemeTokens.Metrics.cardHeight)
+        .frame(height: ThemeTokens.Metrics.cardHeight(for: textScale))
         .onChange(of: item.isCompleted) { isCompleted in
             if !isCompleted {
                 settledFillWidth = 0
@@ -52,19 +53,19 @@ struct TodoRow: View {
     private func rowCard(width: CGFloat) -> some View {
         JellyCard(shadowStyle: .listItem) {
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius * textScale.layoutScale, style: .continuous)
                     .fill(ThemeTokens.accent(for: themeMode).opacity(item.isCompleted ? 0.34 : 0.42))
-                    .frame(width: displayedFillWidth(for: width), height: ThemeTokens.Metrics.cardHeight)
+                    .frame(width: displayedFillWidth(for: width), height: ThemeTokens.Metrics.cardHeight(for: textScale))
                     .animation(.easeOut(duration: 0.18), value: item.isCompleted)
 
                 HStack(spacing: 16) {
                     Text(String(format: "%02d", index))
-                        .font(ThemeTokens.Typography.sectionTitle)
+                        .font(ThemeTokens.Typography.sectionTitle(for: textScale))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                         .frame(width: 44, alignment: .leading)
 
                     Text(item.title)
-                        .font(ThemeTokens.Typography.taskTitle)
+                        .font(ThemeTokens.Typography.taskTitle(for: textScale))
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
                         .lineLimit(1)
                         .strikethrough(item.isCompleted, color: ThemeTokens.Colors.textPrimary)
@@ -81,9 +82,9 @@ struct TodoRow: View {
                 }
                 .padding(.horizontal, 20)
             }
-            .frame(width: width, height: ThemeTokens.Metrics.cardHeight)
+            .frame(width: width, height: ThemeTokens.Metrics.cardHeight(for: textScale))
         }
-        .contentShape(RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: ThemeTokens.Metrics.cornerRadius * textScale.layoutScale, style: .continuous))
         .simultaneousGesture(rowDragGesture(rowWidth: width))
         .onTapGesture {
             if actionReveal > 0 {
@@ -117,7 +118,7 @@ struct TodoRow: View {
     private func swipeButton(title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(ThemeTokens.Typography.caption)
+                .font(ThemeTokens.Typography.caption(for: textScale))
                 .foregroundStyle(ThemeTokens.Colors.textPrimary)
                 .frame(width: 74, height: 72)
                 .background(ThemeTokens.card(for: themeMode))

@@ -3,6 +3,7 @@ import SwiftUI
 struct TodayView: View {
     @EnvironmentObject private var store: AppStore
     @Environment(\.appLanguage) private var language
+    @Environment(\.appTextScale) private var textScale
     @State private var showingNewTask = false
     @State private var editingTodo: TodoItem?
     @State private var selectedTodo: TodoItem?
@@ -24,7 +25,7 @@ struct TodayView: View {
             CapsuleButton(title: L10n.t(.newTask, language), minWidth: 120) {
                 showingNewTask = true
             }
-            .padding(.trailing, ThemeTokens.Metrics.horizontalPadding)
+            .padding(.trailing, ThemeTokens.Metrics.horizontalPadding(for: textScale))
             .padding(.bottom, 18)
         }
         .navigationTitle(L10n.t(.today, language))
@@ -60,11 +61,11 @@ struct TodayView: View {
             }
         }
         .sheet(item: $selectedTodo) { todo in
-            TaskActionSheet(todo: todo) { todo in
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                    focusTodoID = todo.id
-                }
-            }
+	            TaskActionSheet(todo: todo) { todo in
+	                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+	                    focusTodoID = store.prepareFocusTodoID(for: todo.id)
+	                }
+	            }
         }
         .sheet(item: $editingTodo) { todo in
             TodoEditorSheet(title: L10n.t(.editTask, language), todo: todo, confirmTitle: L10n.t(.save, language)) { result in
@@ -72,11 +73,11 @@ struct TodayView: View {
                 store.updateTodoDetail(
                     id: todo.id,
                     cycle: result.cycle,
-                    dailyDurationMinutes: result.dailyDurationMinutes,
-                    focusTimerDirection: result.focusTimerDirection,
-                    note: todo.note
-                )
-            }
+	                    dailyDurationMinutes: result.dailyDurationMinutes,
+	                    focusTimerDirection: result.focusTimerDirection,
+	                    note: result.note
+	                )
+	            }
         }
     }
 
@@ -84,7 +85,7 @@ struct TodayView: View {
     private var todayRows: some View {
         if store.todayTodos.isEmpty {
             Text(L10n.t(.todayIsClear, language))
-                .font(ThemeTokens.Typography.sectionTitle)
+                .font(ThemeTokens.Typography.sectionTitle(for: textScale))
                 .foregroundStyle(ThemeTokens.Colors.textSecondary)
                 .frame(maxWidth: .infinity, minHeight: 320, alignment: .center)
                 .listRowInsets(rowInsets(top: 24, bottom: 0))
@@ -122,13 +123,13 @@ struct TodayView: View {
 
     private func rowInsets(
         top: CGFloat = 0,
-        bottom: CGFloat = ThemeTokens.Metrics.cardSpacing
+        bottom: CGFloat = 0
     ) -> EdgeInsets {
         EdgeInsets(
             top: top,
-            leading: ThemeTokens.Metrics.horizontalPadding,
-            bottom: bottom,
-            trailing: ThemeTokens.Metrics.horizontalPadding
+            leading: ThemeTokens.Metrics.horizontalPadding(for: textScale),
+            bottom: bottom == 0 ? ThemeTokens.Metrics.cardSpacing(for: textScale) : bottom,
+            trailing: ThemeTokens.Metrics.horizontalPadding(for: textScale)
         )
     }
 }

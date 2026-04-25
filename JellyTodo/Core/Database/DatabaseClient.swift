@@ -370,6 +370,7 @@ struct DatabaseClient {
             CREATE TABLE IF NOT EXISTS todo_items (
               id TEXT PRIMARY KEY,
               plan_id TEXT,
+              source_template_id TEXT,
               title TEXT NOT NULL,
               note TEXT NOT NULL DEFAULT '',
               is_completed INTEGER NOT NULL DEFAULT 0,
@@ -387,6 +388,10 @@ struct DatabaseClient {
             CREATE TABLE IF NOT EXISTS pomodoro_sessions (
               id TEXT PRIMARY KEY,
               todo_id TEXT,
+              source_template_id TEXT,
+              plan_id TEXT,
+              plan_title_snapshot TEXT NOT NULL DEFAULT '',
+              todo_title_snapshot TEXT NOT NULL DEFAULT '',
               type TEXT NOT NULL,
               start_at TEXT NOT NULL,
               end_at TEXT NOT NULL,
@@ -411,6 +416,7 @@ struct DatabaseClient {
               haptics_enabled INTEGER NOT NULL DEFAULT 1,
               pomodoro_goal_per_day INTEGER NOT NULL DEFAULT 4,
               use_large_text INTEGER NOT NULL DEFAULT 1,
+              text_scale TEXT NOT NULL DEFAULT 'medium',
               updated_at TEXT NOT NULL
             );
 
@@ -460,6 +466,13 @@ struct DatabaseClient {
             """,
             in: database
         )
+
+        try addColumnIfMissing("source_template_id", definition: "TEXT", to: "todo_items", in: database)
+        try addColumnIfMissing("source_template_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
+        try addColumnIfMissing("plan_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
+        try addColumnIfMissing("plan_title_snapshot", definition: "TEXT NOT NULL DEFAULT ''", to: "pomodoro_sessions", in: database)
+        try addColumnIfMissing("todo_title_snapshot", definition: "TEXT NOT NULL DEFAULT ''", to: "pomodoro_sessions", in: database)
+        try addColumnIfMissing("text_scale", definition: "TEXT NOT NULL DEFAULT 'medium'", to: "app_settings", in: database)
     }
 
     private func migrateLegacyIfNeeded(_ legacySnapshot: StorageSnapshot, in database: OpaquePointer) throws {
@@ -507,7 +520,7 @@ struct DatabaseClient {
     private func readTodos(from database: OpaquePointer) throws -> [TodoItem] {
         try rows(
             sql: """
-            SELECT id, plan_id, is_added_to_today, title, is_completed, created_at, updated_at, task_date,
+            SELECT id, plan_id, source_template_id, is_added_to_today, title, is_completed, created_at, updated_at, task_date,
                    cycle, daily_duration_minutes, focus_timer_direction, note
             FROM todo_items
             WHERE deleted_at IS NULL
@@ -518,16 +531,17 @@ struct DatabaseClient {
             TodoItem(
                 id: uuid(column: 0, statement: statement),
                 planTaskID: optionalUUID(column: 1, statement: statement),
-                isAddedToToday: bool(column: 2, statement: statement),
-                title: string(column: 3, statement: statement),
-                isCompleted: bool(column: 4, statement: statement),
-                createdAt: date(column: 5, statement: statement),
-                updatedAt: date(column: 6, statement: statement),
-                taskDate: date(column: 7, statement: statement),
-                cycle: TodoTaskCycle(rawValue: string(column: 8, statement: statement)) ?? .daily,
-                dailyDurationMinutes: int(column: 9, statement: statement),
-                focusTimerDirection: FocusTimerDirection(rawValue: string(column: 10, statement: statement)) ?? .countDown,
-                note: string(column: 11, statement: statement)
+                sourceTemplateID: optionalUUID(column: 2, statement: statement),
+                isAddedToToday: bool(column: 3, statement: statement),
+                title: string(column: 4, statement: statement),
+                isCompleted: bool(column: 5, statement: statement),
+                createdAt: date(column: 6, statement: statement),
+                updatedAt: date(column: 7, statement: statement),
+                taskDate: date(column: 8, statement: statement),
+                cycle: TodoTaskCycle(rawValue: string(column: 9, statement: statement)) ?? .daily,
+                dailyDurationMinutes: int(column: 10, statement: statement),
+                focusTimerDirection: FocusTimerDirection(rawValue: string(column: 11, statement: statement)) ?? .countDown,
+                note: string(column: 12, statement: statement)
             )
         }
     }
@@ -535,7 +549,8 @@ struct DatabaseClient {
     private func readSessions(from database: OpaquePointer) throws -> [PomodoroSession] {
         try rows(
             sql: """
-            SELECT id, type, start_at, end_at, duration_seconds, todo_id
+            SELECT id, type, start_at, end_at, duration_seconds, todo_id,
+                   source_template_id, plan_id, plan_title_snapshot, todo_title_snapshot
             FROM pomodoro_sessions
             WHERE deleted_at IS NULL
             ORDER BY end_at ASC;
@@ -548,7 +563,11 @@ struct DatabaseClient {
                 startAt: date(column: 2, statement: statement),
                 endAt: date(column: 3, statement: statement),
                 durationSeconds: int(column: 4, statement: statement),
-                relatedTodoID: optionalUUID(column: 5, statement: statement)
+                relatedTodoID: optionalUUID(column: 5, statement: statement),
+                sourceTemplateID: optionalUUID(column: 6, statement: statement),
+                planTaskID: optionalUUID(column: 7, statement: statement),
+                planTitleSnapshot: string(column: 8, statement: statement),
+                todoTitleSnapshot: string(column: 9, statement: statement)
             )
         }
     }
@@ -570,7 +589,7 @@ struct DatabaseClient {
     private func readSettings(from database: OpaquePointer) throws -> AppSettings {
         let result = try rows(
             sql: """
-            SELECT theme_mode, haptics_enabled, pomodoro_goal_per_day, use_large_text, language
+            SELECT theme_mode, haptics_enabled, pomodoro_goal_per_day, use_large_text, language, text_scale
             FROM app_settings
             WHERE id = 'current'
             LIMIT 1;
@@ -581,7 +600,7 @@ struct DatabaseClient {
                 themeMode: AppThemeMode(rawValue: string(column: 0, statement: statement)) ?? .blackWhite,
                 hapticsEnabled: bool(column: 1, statement: statement),
                 pomodoroGoalPerDay: int(column: 2, statement: statement),
-                useLargeText: bool(column: 3, statement: statement),
+                textScale: AppTextScale(rawValue: string(column: 5, statement: statement)) ?? (bool(column: 3, statement: statement) ? .large : .medium),
                 language: AppLanguage(rawValue: string(column: 4, statement: statement)) ?? .english
             )
         }
@@ -679,27 +698,28 @@ struct DatabaseClient {
         try execute("DELETE FROM todo_items;", in: database)
         let sql = """
         INSERT INTO todo_items (
-          id, plan_id, title, note, is_completed, is_added_to_today, task_date, cycle,
+          id, plan_id, source_template_id, title, note, is_completed, is_added_to_today, task_date, cycle,
           daily_duration_minutes, focus_timer_direction, created_at, updated_at, deleted_at, sort_order
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?);
         """
 
         for (index, todo) in todos.enumerated() {
             try run(sql: sql, in: database) { statement in
                 bind(todo.id.uuidString, at: 1, statement: statement)
                 bindOptional(todo.planTaskID?.uuidString, at: 2, statement: statement)
-                bind(todo.title, at: 3, statement: statement)
-                bind(todo.note, at: 4, statement: statement)
-                bind(todo.isCompleted, at: 5, statement: statement)
-                bind(todo.isAddedToToday, at: 6, statement: statement)
-                bind(todo.taskDate.databaseString, at: 7, statement: statement)
-                bind(todo.cycle.rawValue, at: 8, statement: statement)
-                bind(todo.dailyDurationMinutes, at: 9, statement: statement)
-                bind(todo.focusTimerDirection.rawValue, at: 10, statement: statement)
-                bind(todo.createdAt.databaseString, at: 11, statement: statement)
-                bind(todo.updatedAt.databaseString, at: 12, statement: statement)
-                bind(index, at: 13, statement: statement)
+                bindOptional(todo.sourceTemplateID?.uuidString, at: 3, statement: statement)
+                bind(todo.title, at: 4, statement: statement)
+                bind(todo.note, at: 5, statement: statement)
+                bind(todo.isCompleted, at: 6, statement: statement)
+                bind(todo.isAddedToToday, at: 7, statement: statement)
+                bind(todo.taskDate.databaseString, at: 8, statement: statement)
+                bind(todo.cycle.rawValue, at: 9, statement: statement)
+                bind(todo.dailyDurationMinutes, at: 10, statement: statement)
+                bind(todo.focusTimerDirection.rawValue, at: 11, statement: statement)
+                bind(todo.createdAt.databaseString, at: 12, statement: statement)
+                bind(todo.updatedAt.databaseString, at: 13, statement: statement)
+                bind(index, at: 14, statement: statement)
             }
         }
     }
@@ -708,21 +728,26 @@ struct DatabaseClient {
         try execute("DELETE FROM pomodoro_sessions;", in: database)
         let sql = """
         INSERT INTO pomodoro_sessions (
-          id, todo_id, type, start_at, end_at, duration_seconds, created_at, updated_at, deleted_at
+          id, todo_id, source_template_id, plan_id, plan_title_snapshot, todo_title_snapshot,
+          type, start_at, end_at, duration_seconds, created_at, updated_at, deleted_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL);
         """
 
         for session in sessions {
             try run(sql: sql, in: database) { statement in
                 bind(session.id.uuidString, at: 1, statement: statement)
                 bindOptional(session.relatedTodoID?.uuidString, at: 2, statement: statement)
-                bind(session.type.rawValue, at: 3, statement: statement)
-                bind(session.startAt.databaseString, at: 4, statement: statement)
-                bind(session.endAt.databaseString, at: 5, statement: statement)
-                bind(session.durationSeconds, at: 6, statement: statement)
-                bind(session.endAt.databaseString, at: 7, statement: statement)
-                bind(session.endAt.databaseString, at: 8, statement: statement)
+                bindOptional(session.sourceTemplateID?.uuidString, at: 3, statement: statement)
+                bindOptional(session.planTaskID?.uuidString, at: 4, statement: statement)
+                bind(session.planTitleSnapshot, at: 5, statement: statement)
+                bind(session.todoTitleSnapshot, at: 6, statement: statement)
+                bind(session.type.rawValue, at: 7, statement: statement)
+                bind(session.startAt.databaseString, at: 8, statement: statement)
+                bind(session.endAt.databaseString, at: 9, statement: statement)
+                bind(session.durationSeconds, at: 10, statement: statement)
+                bind(session.endAt.databaseString, at: 11, statement: statement)
+                bind(session.endAt.databaseString, at: 12, statement: statement)
             }
         }
     }
@@ -746,9 +771,9 @@ struct DatabaseClient {
         try run(
             sql: """
             INSERT OR REPLACE INTO app_settings (
-              id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day, use_large_text, updated_at
+              id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day, use_large_text, text_scale, updated_at
             )
-            VALUES ('current', ?, ?, ?, ?, ?, ?);
+            VALUES ('current', ?, ?, ?, ?, ?, ?, ?);
             """,
             in: database
         ) { statement in
@@ -756,8 +781,9 @@ struct DatabaseClient {
             bind(settings.language.rawValue, at: 2, statement: statement)
             bind(settings.hapticsEnabled, at: 3, statement: statement)
             bind(settings.pomodoroGoalPerDay, at: 4, statement: statement)
-            bind(settings.useLargeText, at: 5, statement: statement)
-            bind(Date().databaseString, at: 6, statement: statement)
+            bind(settings.textScale == .large, at: 5, statement: statement)
+            bind(settings.textScale.rawValue, at: 6, statement: statement)
+            bind(Date().databaseString, at: 7, statement: statement)
         }
     }
 
@@ -901,6 +927,19 @@ struct DatabaseClient {
             bind(key, at: 1, statement: statement)
             bind(value, at: 2, statement: statement)
         }
+    }
+
+    private func addColumnIfMissing(
+        _ column: String,
+        definition: String,
+        to table: String,
+        in database: OpaquePointer
+    ) throws {
+        let existingColumns = try rows(sql: "PRAGMA table_info(\(table));", in: database) { statement in
+            string(column: 1, statement: statement)
+        }
+        guard !existingColumns.contains(column) else { return }
+        try execute("ALTER TABLE \(table) ADD COLUMN \(column) \(definition);", in: database)
     }
 
     private func transaction(in database: OpaquePointer, operation: () throws -> Void) throws {
