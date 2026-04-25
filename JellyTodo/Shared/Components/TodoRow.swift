@@ -286,7 +286,7 @@ struct CompactTodoRow: View {
                 Spacer()
 
                 VStack(alignment: .trailing, spacing: 6) {
-                    Text(item.cycle.title(language: language))
+                    Text(item.scheduleSummary(language: language, limit: 2))
                         .font(.system(size: 13, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                         .lineLimit(1)

@@ -29,7 +29,7 @@ struct TaskActionSheet: View {
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
-                    cycle: result.cycle,
+                    scheduledDates: result.scheduledDates,
 	                    dailyDurationMinutes: result.dailyDurationMinutes,
 	                    focusTimerDirection: result.focusTimerDirection,
 	                    note: result.note
@@ -56,7 +56,7 @@ struct TaskActionSheet: View {
                     .strikethrough(todo.isCompleted, color: ThemeTokens.Colors.textPrimary)
 
                 HStack(spacing: 8) {
-                    taskMetaPill(title: todo.cycle.title(language: language))
+                    taskMetaPill(title: todo.scheduleSummary(language: language, limit: 2))
                     taskMetaPill(title: durationMinutesText(todo.dailyDurationMinutes))
                     taskMetaPill(title: todo.focusTimerDirection.shortTitle(language: language))
                 }

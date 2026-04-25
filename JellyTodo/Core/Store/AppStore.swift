@@ -177,7 +177,7 @@ final class AppStore: ObservableObject {
     func addPlanItem(
         title: String,
         to planTaskID: UUID,
-        cycle: TodoTaskCycle = .daily,
+        scheduledDates: [Date] = [],
         dailyDurationMinutes: Int = 25,
         focusTimerDirection: FocusTimerDirection = .countDown,
         note: String = ""
@@ -197,7 +197,8 @@ final class AppStore: ObservableObject {
             createdAt: now,
             updatedAt: now,
             taskDate: now,
-            cycle: cycle,
+            cycle: .manual,
+            scheduledDates: normalizedScheduleDates(scheduledDates, fallbackDate: now),
             dailyDurationMinutes: min(max(dailyDurationMinutes, 5), 480),
             focusTimerDirection: focusTimerDirection,
             note: sanitizedNote(note)
@@ -258,14 +259,19 @@ final class AppStore: ObservableObject {
 
     func updateTodoDetail(
         id: UUID,
-        cycle: TodoTaskCycle,
+        scheduledDates: [Date],
         dailyDurationMinutes: Int,
         focusTimerDirection: FocusTimerDirection,
         note: String
     ) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
 
-        todos[index].cycle = cycle
+        let normalizedDates = normalizedScheduleDates(scheduledDates, fallbackDate: todos[index].taskDate)
+        todos[index].cycle = normalizedDates.isEmpty ? todos[index].cycle : .manual
+        todos[index].scheduledDates = normalizedDates
+        if let firstDate = normalizedDates.first, todos[index].isPlanTemplate {
+            todos[index].taskDate = firstDate
+        }
         todos[index].dailyDurationMinutes = min(max(dailyDurationMinutes, 5), 480)
         todos[index].focusTimerDirection = focusTimerDirection
         todos[index].note = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
@@ -1154,6 +1160,7 @@ final class AppStore: ObservableObject {
                     updatedAt: now,
                     taskDate: taskDate,
                     cycle: cycles[globalIndex % cycles.count],
+                    scheduledDates: isToday ? [calendar.startOfDay(for: now)] : [calendar.startOfDay(for: taskDate)],
                     dailyDurationMinutes: durationMinutes,
                     focusTimerDirection: globalIndex % 3 == 0 ? .countUp : .countDown,
                     note: Self.debugPomodoroSeedMarker
@@ -1262,6 +1269,7 @@ final class AppStore: ObservableObject {
                     updatedAt: $0.updatedAt,
                     taskDate: $0.taskDate,
                     cycle: $0.cycle,
+                    scheduledDates: $0.scheduledDates,
                     dailyDurationMinutes: $0.dailyDurationMinutes,
                     focusTimerDirection: $0.focusTimerDirection,
                     note: "\(Self.cloudStagingSeedMarker)\n\($0.note)"
@@ -1348,6 +1356,7 @@ final class AppStore: ObservableObject {
                 updatedAt: cloudTodo.updatedAt,
                 taskDate: cloudTodo.taskDate,
                 cycle: cloudTodo.cycle,
+                scheduledDates: cloudTodo.scheduledDates,
                 dailyDurationMinutes: cloudTodo.dailyDurationMinutes,
                 focusTimerDirection: cloudTodo.focusTimerDirection,
                 note: cloudTodo.note
@@ -1525,6 +1534,7 @@ final class AppStore: ObservableObject {
                 updatedAt: Date(),
                 taskDate: occurrence.taskDate,
                 cycle: occurrence.cycle,
+                scheduledDates: occurrence.scheduledDates,
                 dailyDurationMinutes: occurrence.dailyDurationMinutes,
                 focusTimerDirection: occurrence.focusTimerDirection,
                 note: occurrence.note
@@ -1547,6 +1557,10 @@ final class AppStore: ObservableObject {
             $0.sourceTemplateID == template.id && calendar.isDate($0.taskDate, inSameDayAs: day)
         }
         guard !hasOccurrenceToday else { return false }
+
+        if template.hasExplicitSchedule {
+            return template.normalizedScheduledDates().contains { calendar.isDate($0, inSameDayAs: day) }
+        }
 
         switch template.cycle {
         case .manual:
@@ -1581,6 +1595,7 @@ final class AppStore: ObservableObject {
         }) {
             todos[existingIndex].title = template.title
             todos[existingIndex].cycle = template.cycle
+            todos[existingIndex].scheduledDates = template.scheduledDates
             todos[existingIndex].dailyDurationMinutes = template.dailyDurationMinutes
             todos[existingIndex].focusTimerDirection = template.focusTimerDirection
             todos[existingIndex].note = template.note
@@ -1601,6 +1616,7 @@ final class AppStore: ObservableObject {
             updatedAt: now,
             taskDate: calendar.startOfDay(for: now),
             cycle: template.cycle,
+            scheduledDates: template.scheduledDates,
             dailyDurationMinutes: template.dailyDurationMinutes,
             focusTimerDirection: template.focusTimerDirection,
             note: template.note
@@ -1611,6 +1627,15 @@ final class AppStore: ObservableObject {
 
     private func sanitizedNote(_ note: String) -> String {
         String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
+    }
+
+    private func normalizedScheduleDates(_ dates: [Date], fallbackDate: Date) -> [Date] {
+        let calendar = Calendar.current
+        let normalized = dates.map { calendar.startOfDay(for: $0) }
+        let unique = Set(normalized.map(\.timeIntervalSinceReferenceDate))
+            .map(Date.init(timeIntervalSinceReferenceDate:))
+            .sorted()
+        return unique.isEmpty ? [calendar.startOfDay(for: fallbackDate)] : unique
     }
 
     private func pomodoroSessionSnapshot(for todoID: UUID?) -> (sourceTemplateID: UUID?, planTaskID: UUID?, planTitle: String, todoTitle: String)? {

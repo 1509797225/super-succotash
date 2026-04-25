@@ -72,10 +72,10 @@ struct TodayView: View {
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
-                    cycle: result.cycle,
-	                    dailyDurationMinutes: result.dailyDurationMinutes,
-	                    focusTimerDirection: result.focusTimerDirection,
-	                    note: result.note
+                    scheduledDates: result.scheduledDates,
+                    dailyDurationMinutes: result.dailyDurationMinutes,
+                    focusTimerDirection: result.focusTimerDirection,
+                    note: result.note
 	                )
 	            }
         }

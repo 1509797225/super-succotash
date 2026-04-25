@@ -377,6 +377,7 @@ struct DatabaseClient {
               is_added_to_today INTEGER NOT NULL DEFAULT 1,
               task_date TEXT NOT NULL,
               cycle TEXT NOT NULL DEFAULT 'daily',
+              scheduled_dates TEXT NOT NULL DEFAULT '[]',
               daily_duration_minutes INTEGER NOT NULL DEFAULT 25,
               focus_timer_direction TEXT NOT NULL DEFAULT 'countDown',
               created_at TEXT NOT NULL,
@@ -468,6 +469,7 @@ struct DatabaseClient {
         )
 
         try addColumnIfMissing("source_template_id", definition: "TEXT", to: "todo_items", in: database)
+        try addColumnIfMissing("scheduled_dates", definition: "TEXT NOT NULL DEFAULT '[]'", to: "todo_items", in: database)
         try addColumnIfMissing("source_template_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("plan_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("plan_title_snapshot", definition: "TEXT NOT NULL DEFAULT ''", to: "pomodoro_sessions", in: database)
@@ -521,7 +523,7 @@ struct DatabaseClient {
         try rows(
             sql: """
             SELECT id, plan_id, source_template_id, is_added_to_today, title, is_completed, created_at, updated_at, task_date,
-                   cycle, daily_duration_minutes, focus_timer_direction, note
+                   cycle, scheduled_dates, daily_duration_minutes, focus_timer_direction, note
             FROM todo_items
             WHERE deleted_at IS NULL
             ORDER BY created_at ASC;
@@ -539,9 +541,10 @@ struct DatabaseClient {
                 updatedAt: date(column: 7, statement: statement),
                 taskDate: date(column: 8, statement: statement),
                 cycle: TodoTaskCycle(rawValue: string(column: 9, statement: statement)) ?? .daily,
-                dailyDurationMinutes: int(column: 10, statement: statement),
-                focusTimerDirection: FocusTimerDirection(rawValue: string(column: 11, statement: statement)) ?? .countDown,
-                note: string(column: 12, statement: statement)
+                scheduledDates: decodeDateArray(string(column: 10, statement: statement)),
+                dailyDurationMinutes: int(column: 11, statement: statement),
+                focusTimerDirection: FocusTimerDirection(rawValue: string(column: 12, statement: statement)) ?? .countDown,
+                note: string(column: 13, statement: statement)
             )
         }
     }
@@ -699,9 +702,9 @@ struct DatabaseClient {
         let sql = """
         INSERT INTO todo_items (
           id, plan_id, source_template_id, title, note, is_completed, is_added_to_today, task_date, cycle,
-          daily_duration_minutes, focus_timer_direction, created_at, updated_at, deleted_at, sort_order
+          scheduled_dates, daily_duration_minutes, focus_timer_direction, created_at, updated_at, deleted_at, sort_order
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?);
         """
 
         for (index, todo) in todos.enumerated() {
@@ -715,11 +718,12 @@ struct DatabaseClient {
                 bind(todo.isAddedToToday, at: 7, statement: statement)
                 bind(todo.taskDate.databaseString, at: 8, statement: statement)
                 bind(todo.cycle.rawValue, at: 9, statement: statement)
-                bind(todo.dailyDurationMinutes, at: 10, statement: statement)
-                bind(todo.focusTimerDirection.rawValue, at: 11, statement: statement)
-                bind(todo.createdAt.databaseString, at: 12, statement: statement)
-                bind(todo.updatedAt.databaseString, at: 13, statement: statement)
-                bind(index, at: 14, statement: statement)
+                bind(encodeDateArray(todo.scheduledDates), at: 10, statement: statement)
+                bind(todo.dailyDurationMinutes, at: 11, statement: statement)
+                bind(todo.focusTimerDirection.rawValue, at: 12, statement: statement)
+                bind(todo.createdAt.databaseString, at: 13, statement: statement)
+                bind(todo.updatedAt.databaseString, at: 14, statement: statement)
+                bind(index, at: 15, statement: statement)
             }
         }
     }
@@ -1070,6 +1074,23 @@ private func date(column: Int32, statement: OpaquePointer) -> Date {
 private func optionalDate(column: Int32, statement: OpaquePointer) -> Date? {
     guard sqlite3_column_type(statement, column) != SQLITE_NULL else { return nil }
     return Date.databaseFormatter.date(from: string(column: column, statement: statement))
+}
+
+private func encodeDateArray(_ dates: [Date]) -> String {
+    let values = dates.map(\.databaseString)
+    guard let data = try? JSONEncoder().encode(values),
+          let json = String(data: data, encoding: .utf8) else {
+        return "[]"
+    }
+    return json
+}
+
+private func decodeDateArray(_ stringValue: String) -> [Date] {
+    guard let data = stringValue.data(using: .utf8),
+          let values = try? JSONDecoder().decode([String].self, from: data) else {
+        return []
+    }
+    return values.compactMap(Date.init(databaseString:))
 }
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)

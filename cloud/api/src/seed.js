@@ -148,13 +148,13 @@ export async function seedDebugData(levelName = "basic") {
           `
           INSERT INTO todo_items (
             id, user_id, device_id, plan_id, title, note, is_completed,
-            is_added_to_today, task_date, cycle, daily_duration_minutes,
+            is_added_to_today, task_date, cycle, scheduled_dates, daily_duration_minutes,
             focus_timer_direction, sort_order, created_at, updated_at
           )
           VALUES (
             $1, $2, $3, $4, $5, $6, $7,
-            $8, $9, $10, $11,
-            $12, $13, $14, $14
+            $8, $9, $10, $11::jsonb, $12,
+            $13, $14, $15, $15
           )
           `,
           [
@@ -168,6 +168,7 @@ export async function seedDebugData(levelName = "basic") {
             isToday,
             iso(taskDate),
             ["once", "daily", "weekly", "monthly"][(planIndex + itemIndex) % 4],
+            JSON.stringify([iso(taskDate)]),
             dailyDuration,
             direction,
             itemIndex,

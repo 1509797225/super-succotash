@@ -175,6 +175,7 @@ struct CloudTodoItem: Decodable, Equatable {
     let isAddedToToday: Bool
     let taskDate: Date
     let cycle: TodoTaskCycle
+    let scheduledDates: [Date]
     let dailyDurationMinutes: Int
     let focusTimerDirection: FocusTimerDirection
     let createdAt: Date
@@ -191,11 +192,31 @@ struct CloudTodoItem: Decodable, Equatable {
         case isAddedToToday = "is_added_to_today"
         case taskDate = "task_date"
         case cycle
+        case scheduledDates = "scheduled_dates"
         case dailyDurationMinutes = "daily_duration_minutes"
         case focusTimerDirection = "focus_timer_direction"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        planID = try container.decodeIfPresent(UUID.self, forKey: .planID)
+        sourceTemplateID = try container.decodeIfPresent(UUID.self, forKey: .sourceTemplateID)
+        title = try container.decode(String.self, forKey: .title)
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        isCompleted = try container.decode(Bool.self, forKey: .isCompleted)
+        isAddedToToday = try container.decode(Bool.self, forKey: .isAddedToToday)
+        taskDate = try container.decode(Date.self, forKey: .taskDate)
+        cycle = try container.decodeIfPresent(TodoTaskCycle.self, forKey: .cycle) ?? .daily
+        scheduledDates = try container.decodeIfPresent([Date].self, forKey: .scheduledDates) ?? []
+        dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
+        focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
     }
 }
 

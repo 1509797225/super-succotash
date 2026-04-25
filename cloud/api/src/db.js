@@ -102,6 +102,7 @@ export async function initSchema() {
       is_added_to_today BOOLEAN NOT NULL DEFAULT true,
       task_date TIMESTAMPTZ NOT NULL,
       cycle TEXT NOT NULL DEFAULT 'daily',
+      scheduled_dates JSONB NOT NULL DEFAULT '[]'::jsonb,
       daily_duration_minutes INTEGER NOT NULL DEFAULT 25,
       focus_timer_direction TEXT NOT NULL DEFAULT 'countDown',
       sort_order INTEGER NOT NULL DEFAULT 0,
@@ -187,8 +188,9 @@ export async function initSchema() {
 	    ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 	    ALTER TABLE devices ADD COLUMN IF NOT EXISTS auth_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
 	    ALTER TABLE devices ADD COLUMN IF NOT EXISTS anonymous_user_id TEXT;
-	    ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
-	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
+	  ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
+	  ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS scheduled_dates JSONB NOT NULL DEFAULT '[]'::jsonb;
+	  ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
 	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS plan_title_snapshot TEXT NOT NULL DEFAULT '';
 	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS todo_title_snapshot TEXT NOT NULL DEFAULT '';
 	  `);

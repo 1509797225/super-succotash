@@ -121,7 +121,7 @@ struct PlanView: View {
                     store.addPlanItem(
                         title: result.title,
                         to: addingItemTaskID,
-	                        cycle: result.cycle,
+	                        scheduledDates: result.scheduledDates,
 	                        dailyDurationMinutes: result.dailyDurationMinutes,
 	                        focusTimerDirection: result.focusTimerDirection,
 	                        note: result.note
@@ -141,7 +141,7 @@ struct PlanView: View {
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
-                    cycle: result.cycle,
+                    scheduledDates: result.scheduledDates,
 	                    dailyDurationMinutes: result.dailyDurationMinutes,
 	                    focusTimerDirection: result.focusTimerDirection,
 	                    note: result.note

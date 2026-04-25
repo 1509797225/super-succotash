@@ -109,6 +109,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var updatedAt: Date
     var taskDate: Date
     var cycle: TodoTaskCycle
+    var scheduledDates: [Date]
     var dailyDurationMinutes: Int
     var focusTimerDirection: FocusTimerDirection
     var note: String
@@ -124,6 +125,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         updatedAt: Date,
         taskDate: Date,
         cycle: TodoTaskCycle = .daily,
+        scheduledDates: [Date] = [],
         dailyDurationMinutes: Int = 25,
         focusTimerDirection: FocusTimerDirection = .countDown,
         note: String = ""
@@ -138,6 +140,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.taskDate = taskDate
         self.cycle = cycle
+        self.scheduledDates = Self.normalizedScheduledDates(from: scheduledDates)
         self.dailyDurationMinutes = dailyDurationMinutes
         self.focusTimerDirection = focusTimerDirection
         self.note = note
@@ -154,6 +157,7 @@ struct TodoItem: Identifiable, Codable, Equatable {
         case updatedAt
         case taskDate
         case cycle
+        case scheduledDates
         case dailyDurationMinutes
         case focusTimerDirection
         case note
@@ -171,9 +175,20 @@ struct TodoItem: Identifiable, Codable, Equatable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         taskDate = try container.decode(Date.self, forKey: .taskDate)
         cycle = try container.decodeIfPresent(TodoTaskCycle.self, forKey: .cycle) ?? .daily
+        scheduledDates = Self.normalizedScheduledDates(
+            from: try container.decodeIfPresent([Date].self, forKey: .scheduledDates) ?? []
+        )
         dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
         focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+    }
+
+    private static func normalizedScheduledDates(from dates: [Date]) -> [Date] {
+        let calendar = Calendar.current
+        let normalized = dates.map { calendar.startOfDay(for: $0) }
+        let unique = Set(normalized.map(\.timeIntervalSinceReferenceDate))
+            .map(Date.init(timeIntervalSinceReferenceDate:))
+        return unique.sorted()
     }
 }
 
@@ -184,6 +199,36 @@ extension TodoItem {
 
     var isTodayOccurrence: Bool {
         sourceTemplateID != nil && isAddedToToday
+    }
+
+    var hasExplicitSchedule: Bool {
+        !scheduledDates.isEmpty
+    }
+
+    func normalizedScheduledDates() -> [Date] {
+        let calendar = Calendar.current
+        let unique = Set(scheduledDates.map { calendar.startOfDay(for: $0).timeIntervalSinceReferenceDate })
+        return unique.map(Date.init(timeIntervalSinceReferenceDate:)).sorted()
+    }
+
+    func scheduleSummary(language: AppLanguage, limit: Int = 3) -> String {
+        let dates = normalizedScheduledDates()
+        guard !dates.isEmpty else {
+            return cycle.title(language: language)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.dateFormat = language == .english ? "MMM d" : "M月d日"
+
+        let titles = dates.prefix(limit).map { formatter.string(from: $0) }
+        let suffixCount = dates.count - titles.count
+        let joined = titles.joined(separator: language == .english ? ", " : "、")
+
+        if suffixCount > 0 {
+            return language == .english ? "\(joined) +\(suffixCount)" : "\(joined) 等\(dates.count)天"
+        }
+        return joined
     }
 }
 
