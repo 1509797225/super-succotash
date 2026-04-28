@@ -2,6 +2,8 @@ import SwiftUI
 
 struct TodoEditorResult {
     let title: String
+    let scheduleMode: TodoScheduleMode
+    let recurrenceValue: Int?
     let scheduledDates: [Date]
     let dailyDurationMinutes: Int
     let focusTimerDirection: FocusTimerDirection
@@ -22,6 +24,7 @@ struct TodoEditorSheet: View {
     @State private var text: String
     @State private var scheduledDates: [Date]
     @State private var monthPageOffset: Int
+    @GestureState private var calendarDragOffset: CGFloat
     @State private var recurrenceMode: RecurrenceMode
     @State private var weeklyValue: Int
     @State private var monthlyValue: Int
@@ -40,6 +43,7 @@ struct TodoEditorSheet: View {
         _text = State(initialValue: initialText)
         _scheduledDates = State(initialValue: [])
         _monthPageOffset = State(initialValue: 0)
+        _calendarDragOffset = GestureState(initialValue: 0)
         _recurrenceMode = State(initialValue: .custom)
         _weeklyValue = State(initialValue: 1)
         _monthlyValue = State(initialValue: Calendar.current.component(.day, from: Date()))
@@ -63,7 +67,8 @@ struct TodoEditorSheet: View {
         _text = State(initialValue: initialText)
         _scheduledDates = State(initialValue: [Calendar.current.startOfDay(for: Date())])
         _monthPageOffset = State(initialValue: 0)
-        _recurrenceMode = State(initialValue: .custom)
+        _calendarDragOffset = GestureState(initialValue: 0)
+        _recurrenceMode = State(initialValue: .daily)
         _weeklyValue = State(initialValue: Calendar.current.component(.weekday, from: Date()))
         _monthlyValue = State(initialValue: Calendar.current.component(.day, from: Date()))
         _durationText = State(initialValue: "25")
@@ -77,12 +82,15 @@ struct TodoEditorSheet: View {
         self.confirmTitle = confirmTitle
         self.showsFocusSettings = true
         self.onConfirm = onConfirm
+        let previewDates = todo.editorPreviewDates()
+        let resolvedMode = RecurrenceMode(todo.scheduleMode)
         _text = State(initialValue: todo.title)
-        _scheduledDates = State(initialValue: todo.scheduledDates.isEmpty ? [Calendar.current.startOfDay(for: todo.taskDate)] : todo.normalizedScheduledDates())
+        _scheduledDates = State(initialValue: previewDates.isEmpty ? [Calendar.current.startOfDay(for: todo.taskDate)] : previewDates)
         _monthPageOffset = State(initialValue: 0)
-        _recurrenceMode = State(initialValue: .custom)
-        _weeklyValue = State(initialValue: Calendar.current.component(.weekday, from: todo.taskDate))
-        _monthlyValue = State(initialValue: Calendar.current.component(.day, from: todo.taskDate))
+        _calendarDragOffset = GestureState(initialValue: 0)
+        _recurrenceMode = State(initialValue: resolvedMode)
+        _weeklyValue = State(initialValue: todo.recurrenceValue ?? Calendar.current.component(.weekday, from: todo.taskDate))
+        _monthlyValue = State(initialValue: todo.recurrenceValue ?? Calendar.current.component(.day, from: todo.taskDate))
         _durationText = State(initialValue: "\(todo.dailyDurationMinutes)")
         _focusTimerDirection = State(initialValue: todo.focusTimerDirection)
         _note = State(initialValue: todo.note)
@@ -108,6 +116,7 @@ struct TodoEditorSheet: View {
                             noteField
                         }
                     }
+                    .padding(.bottom, showsFocusSettings ? 20 : 0)
                 }
 
                 HStack(spacing: 16) {
@@ -131,10 +140,6 @@ struct TodoEditorSheet: View {
             VStack(alignment: .leading, spacing: 12) {
                 recurrencePicker
                 scheduleCalendar
-
-                Text(scheduleSummaryText)
-                    .font(ThemeTokens.Typography.caption(for: textScale))
-                    .foregroundStyle(ThemeTokens.Colors.textSecondary.opacity(0.86))
             }
         }
     }
@@ -227,17 +232,22 @@ struct TodoEditorSheet: View {
     }
 
     private var scheduleCalendar: some View {
-        VStack(spacing: 8) {
-            TabView(selection: $monthPageOffset) {
-                ForEach(monthOffsets, id: \.self) { offset in
-                    monthGridSection(for: offset)
-                        .tag(offset)
+        GeometryReader { proxy in
+            let width = max(proxy.size.width, 1)
+
+            HStack(spacing: 0) {
+                ForEach([-1, 0, 1], id: \.self) { delta in
+                    monthGridSection(for: monthPageOffset + delta)
                         .padding(.top, 2)
+                        .frame(width: width)
                 }
             }
-            .frame(height: calendarPageHeight)
-            .tabViewStyle(.page(indexDisplayMode: .never))
+            .offset(x: -width + calendarDragOffset)
+            .gesture(calendarSwipeGesture(pageWidth: width))
+            .clipped()
         }
+        .frame(height: calendarPageHeight)
+        .contentShape(Rectangle())
     }
 
     @ViewBuilder
@@ -375,9 +385,12 @@ struct TodoEditorSheet: View {
     }
 
     private var editorResult: TodoEditorResult {
-        TodoEditorResult(
+        let mode = recurrenceMode.scheduleMode
+        return TodoEditorResult(
             title: text,
-            scheduledDates: normalizedScheduledDates,
+            scheduleMode: mode,
+            recurrenceValue: recurrenceValueForEditor,
+            scheduledDates: mode == .custom ? normalizedScheduledDates : [],
             dailyDurationMinutes: min(max(Int(durationText) ?? 25, 5), 480),
             focusTimerDirection: focusTimerDirection,
             note: note
@@ -389,17 +402,13 @@ struct TodoEditorSheet: View {
         return calendar.startOfDay(for: Date())
     }
 
-    private var monthOffsets: [Int] {
-        Array(-24...24)
-    }
-
     private var calendarPageHeight: CGFloat {
         let rowCount = monthSection(for: monthPageOffset)?.rowCount ?? 6
-        let headerHeight: CGFloat = 28
-        let weekHeight: CGFloat = 20
+        let headerHeight: CGFloat = 34
+        let weekHeight: CGFloat = 24
         let gaps = CGFloat(max(rowCount - 1, 0)) * 8
         let gridHeight = CGFloat(rowCount) * dayCellHeight + gaps
-        return headerHeight + weekHeight + gridHeight + 32
+        return headerHeight + weekHeight + gridHeight + 52
     }
 
     private func monthSection(for offset: Int) -> CalendarMonthSection? {
@@ -594,6 +603,32 @@ struct TodoEditorSheet: View {
         )
     }
 
+    private func calendarSwipeGesture(pageWidth: CGFloat) -> some Gesture {
+        DragGesture(minimumDistance: 10, coordinateSpace: .local)
+            .updating($calendarDragOffset) { value, state, _ in
+                let translation = value.translation.width
+                let limited = min(max(translation, -pageWidth * 0.9), pageWidth * 0.9)
+                state = limited
+            }
+            .onEnded { value in
+                let predicted = value.predictedEndTranslation.width
+                let threshold = pageWidth * 0.22
+                let destination: Int
+
+                if predicted <= -threshold {
+                    destination = monthPageOffset + 1
+                } else if predicted >= threshold {
+                    destination = monthPageOffset - 1
+                } else {
+                    destination = monthPageOffset
+                }
+
+                withAnimation(.interactiveSpring(response: 0.34, dampingFraction: 0.86, blendDuration: 0.18)) {
+                    monthPageOffset = destination
+                }
+            }
+    }
+
     private func selectedDatesInMonth(_ monthDate: Date) -> Int {
         let calendar = Calendar.current
         return normalizedScheduledDates.filter { calendar.isDate($0, equalTo: monthDate, toGranularity: .month) }.count
@@ -662,6 +697,17 @@ struct TodoEditorSheet: View {
             return "\(value)"
         }
     }
+
+    private var recurrenceValueForEditor: Int? {
+        switch recurrenceMode {
+        case .weekly:
+            return weeklyValue
+        case .monthly:
+            return monthlyValue
+        case .daily, .custom:
+            return nil
+        }
+    }
 }
 
 private enum RecurrenceMode {
@@ -669,6 +715,32 @@ private enum RecurrenceMode {
     case daily
     case weekly
     case monthly
+
+    init(_ mode: TodoScheduleMode) {
+        switch mode {
+        case .custom:
+            self = .custom
+        case .daily:
+            self = .daily
+        case .weekly:
+            self = .weekly
+        case .monthly:
+            self = .monthly
+        }
+    }
+
+    var scheduleMode: TodoScheduleMode {
+        switch self {
+        case .custom:
+            return .custom
+        case .daily:
+            return .daily
+        case .weekly:
+            return .weekly
+        case .monthly:
+            return .monthly
+        }
+    }
 }
 
 private struct CalendarMonthSection: Identifiable {

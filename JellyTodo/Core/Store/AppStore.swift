@@ -177,6 +177,8 @@ final class AppStore: ObservableObject {
     func addPlanItem(
         title: String,
         to planTaskID: UUID,
+        scheduleMode: TodoScheduleMode = .custom,
+        recurrenceValue: Int? = nil,
         scheduledDates: [Date] = [],
         dailyDurationMinutes: Int = 25,
         focusTimerDirection: FocusTimerDirection = .countDown,
@@ -197,8 +199,10 @@ final class AppStore: ObservableObject {
             createdAt: now,
             updatedAt: now,
             taskDate: now,
-            cycle: .manual,
-            scheduledDates: normalizedScheduleDates(scheduledDates, fallbackDate: now),
+            cycle: legacyCycle(for: scheduleMode),
+            scheduleMode: scheduleMode,
+            recurrenceValue: recurrenceValue,
+            scheduledDates: scheduleMode == .custom ? normalizedScheduleDates(scheduledDates, fallbackDate: now) : [],
             dailyDurationMinutes: min(max(dailyDurationMinutes, 5), 480),
             focusTimerDirection: focusTimerDirection,
             note: sanitizedNote(note)
@@ -259,6 +263,8 @@ final class AppStore: ObservableObject {
 
     func updateTodoDetail(
         id: UUID,
+        scheduleMode: TodoScheduleMode,
+        recurrenceValue: Int?,
         scheduledDates: [Date],
         dailyDurationMinutes: Int,
         focusTimerDirection: FocusTimerDirection,
@@ -266,11 +272,17 @@ final class AppStore: ObservableObject {
     ) {
         guard let index = todos.firstIndex(where: { $0.id == id }) else { return }
 
-        let normalizedDates = normalizedScheduleDates(scheduledDates, fallbackDate: todos[index].taskDate)
-        todos[index].cycle = normalizedDates.isEmpty ? todos[index].cycle : .manual
+        let normalizedDates = scheduleMode == .custom
+            ? normalizedScheduleDates(scheduledDates, fallbackDate: todos[index].taskDate)
+            : []
+        todos[index].cycle = scheduleMode == .custom ? .manual : legacyCycle(for: scheduleMode)
+        todos[index].scheduleMode = scheduleMode
+        todos[index].recurrenceValue = recurrenceValue
         todos[index].scheduledDates = normalizedDates
-        if let firstDate = normalizedDates.first, todos[index].isPlanTemplate {
+        if let firstDate = normalizedDates.first, todos[index].isPlanTemplate, scheduleMode == .custom {
             todos[index].taskDate = firstDate
+        } else if todos[index].isPlanTemplate {
+            todos[index].taskDate = templateAnchorDate(for: scheduleMode, recurrenceValue: recurrenceValue, fallback: todos[index].taskDate)
         }
         todos[index].dailyDurationMinutes = min(max(dailyDurationMinutes, 5), 480)
         todos[index].focusTimerDirection = focusTimerDirection
@@ -1269,6 +1281,8 @@ final class AppStore: ObservableObject {
                     updatedAt: $0.updatedAt,
                     taskDate: $0.taskDate,
                     cycle: $0.cycle,
+                    scheduleMode: $0.scheduleMode,
+                    recurrenceValue: $0.recurrenceValue,
                     scheduledDates: $0.scheduledDates,
                     dailyDurationMinutes: $0.dailyDurationMinutes,
                     focusTimerDirection: $0.focusTimerDirection,
@@ -1356,6 +1370,8 @@ final class AppStore: ObservableObject {
                 updatedAt: cloudTodo.updatedAt,
                 taskDate: cloudTodo.taskDate,
                 cycle: cloudTodo.cycle,
+                scheduleMode: cloudTodo.scheduleMode,
+                recurrenceValue: cloudTodo.recurrenceValue,
                 scheduledDates: cloudTodo.scheduledDates,
                 dailyDurationMinutes: cloudTodo.dailyDurationMinutes,
                 focusTimerDirection: cloudTodo.focusTimerDirection,
@@ -1534,6 +1550,8 @@ final class AppStore: ObservableObject {
                 updatedAt: Date(),
                 taskDate: occurrence.taskDate,
                 cycle: occurrence.cycle,
+                scheduleMode: occurrence.scheduleMode,
+                recurrenceValue: occurrence.recurrenceValue,
                 scheduledDates: occurrence.scheduledDates,
                 dailyDurationMinutes: occurrence.dailyDurationMinutes,
                 focusTimerDirection: occurrence.focusTimerDirection,
@@ -1562,24 +1580,40 @@ final class AppStore: ObservableObject {
             return template.normalizedScheduledDates().contains { calendar.isDate($0, inSameDayAs: day) }
         }
 
-        switch template.cycle {
-        case .manual:
-            return false
-        case .once:
-            return !todos.contains { $0.sourceTemplateID == template.id }
+        switch template.scheduleMode {
+        case .custom:
+            switch template.cycle {
+            case .manual:
+                return false
+            case .once:
+                return !todos.contains { $0.sourceTemplateID == template.id }
+            case .daily:
+                return template.taskDate <= date
+            case .weekly:
+                return template.taskDate <= date
+                    && calendar.component(.weekday, from: template.taskDate) == calendar.component(.weekday, from: date)
+            case .monthly:
+                return template.taskDate <= date && isMonthlyDue(template.taskDate, on: date)
+            }
         case .daily:
-            return template.taskDate <= date
+            return true
         case .weekly:
-            return template.taskDate <= date
-                && calendar.component(.weekday, from: template.taskDate) == calendar.component(.weekday, from: date)
+            let weekday = template.recurrenceValue ?? calendar.component(.weekday, from: template.taskDate)
+            return weekday == calendar.component(.weekday, from: day)
         case .monthly:
-            return template.taskDate <= date && isMonthlyDue(template.taskDate, on: date)
+            let anchorDay = template.recurrenceValue ?? calendar.component(.day, from: template.taskDate)
+            return isMonthlyDue(day: anchorDay, on: day)
         }
     }
 
     private func isMonthlyDue(_ templateDate: Date, on date: Date) -> Bool {
         let calendar = Calendar.current
         let templateDay = calendar.component(.day, from: templateDate)
+        return isMonthlyDue(day: templateDay, on: date)
+    }
+
+    private func isMonthlyDue(day templateDay: Int, on date: Date) -> Bool {
+        let calendar = Calendar.current
         let currentDay = calendar.component(.day, from: date)
         let lastDay = calendar.range(of: .day, in: .month, for: date)?.upperBound.advanced(by: -1) ?? currentDay
         return currentDay == min(templateDay, lastDay)
@@ -1595,6 +1629,8 @@ final class AppStore: ObservableObject {
         }) {
             todos[existingIndex].title = template.title
             todos[existingIndex].cycle = template.cycle
+            todos[existingIndex].scheduleMode = template.scheduleMode
+            todos[existingIndex].recurrenceValue = template.recurrenceValue
             todos[existingIndex].scheduledDates = template.scheduledDates
             todos[existingIndex].dailyDurationMinutes = template.dailyDurationMinutes
             todos[existingIndex].focusTimerDirection = template.focusTimerDirection
@@ -1616,6 +1652,8 @@ final class AppStore: ObservableObject {
             updatedAt: now,
             taskDate: calendar.startOfDay(for: now),
             cycle: template.cycle,
+            scheduleMode: template.scheduleMode,
+            recurrenceValue: template.recurrenceValue,
             scheduledDates: template.scheduledDates,
             dailyDurationMinutes: template.dailyDurationMinutes,
             focusTimerDirection: template.focusTimerDirection,
@@ -1636,6 +1674,66 @@ final class AppStore: ObservableObject {
             .map(Date.init(timeIntervalSinceReferenceDate:))
             .sorted()
         return unique.isEmpty ? [calendar.startOfDay(for: fallbackDate)] : unique
+    }
+
+    private func legacyCycle(for mode: TodoScheduleMode) -> TodoTaskCycle {
+        switch mode {
+        case .custom:
+            return .manual
+        case .daily:
+            return .daily
+        case .weekly:
+            return .weekly
+        case .monthly:
+            return .monthly
+        }
+    }
+
+    private func templateAnchorDate(for mode: TodoScheduleMode, recurrenceValue: Int?, fallback: Date) -> Date {
+        let calendar = Calendar.current
+        let now = calendar.startOfDay(for: Date())
+
+        switch mode {
+        case .custom:
+            return fallback
+        case .daily:
+            return now
+        case .weekly:
+            let weekday = recurrenceValue ?? calendar.component(.weekday, from: fallback)
+            return nextWeekdayDate(weekday: weekday, from: now) ?? fallback
+        case .monthly:
+            let day = recurrenceValue ?? calendar.component(.day, from: fallback)
+            return nextMonthlyDate(day: day, from: now) ?? fallback
+        }
+    }
+
+    private func nextWeekdayDate(weekday: Int, from start: Date) -> Date? {
+        let calendar = Calendar.current
+        var cursor = start
+        for _ in 0..<7 {
+            if calendar.component(.weekday, from: cursor) == weekday {
+                return cursor
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return nil
+    }
+
+    private func nextMonthlyDate(day: Int, from start: Date) -> Date? {
+        let calendar = Calendar.current
+        for offset in 0..<2 {
+            guard let monthDate = calendar.date(byAdding: .month, value: offset, to: start),
+                  let monthRange = calendar.range(of: .day, in: .month, for: monthDate),
+                  let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: monthDate))
+            else { continue }
+
+            let targetDay = min(day, monthRange.count)
+            if let targetDate = calendar.date(byAdding: .day, value: targetDay - 1, to: monthStart), targetDate >= start {
+                return targetDate
+            }
+        }
+        return nil
     }
 
     private func pomodoroSessionSnapshot(for todoID: UUID?) -> (sourceTemplateID: UUID?, planTaskID: UUID?, planTitle: String, todoTitle: String)? {

@@ -377,6 +377,8 @@ struct DatabaseClient {
               is_added_to_today INTEGER NOT NULL DEFAULT 1,
               task_date TEXT NOT NULL,
               cycle TEXT NOT NULL DEFAULT 'daily',
+              schedule_mode TEXT NOT NULL DEFAULT 'custom',
+              recurrence_value INTEGER,
               scheduled_dates TEXT NOT NULL DEFAULT '[]',
               daily_duration_minutes INTEGER NOT NULL DEFAULT 25,
               focus_timer_direction TEXT NOT NULL DEFAULT 'countDown',
@@ -469,6 +471,8 @@ struct DatabaseClient {
         )
 
         try addColumnIfMissing("source_template_id", definition: "TEXT", to: "todo_items", in: database)
+        try addColumnIfMissing("schedule_mode", definition: "TEXT NOT NULL DEFAULT 'custom'", to: "todo_items", in: database)
+        try addColumnIfMissing("recurrence_value", definition: "INTEGER", to: "todo_items", in: database)
         try addColumnIfMissing("scheduled_dates", definition: "TEXT NOT NULL DEFAULT '[]'", to: "todo_items", in: database)
         try addColumnIfMissing("source_template_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("plan_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
@@ -523,7 +527,7 @@ struct DatabaseClient {
         try rows(
             sql: """
             SELECT id, plan_id, source_template_id, is_added_to_today, title, is_completed, created_at, updated_at, task_date,
-                   cycle, scheduled_dates, daily_duration_minutes, focus_timer_direction, note
+                   cycle, schedule_mode, recurrence_value, scheduled_dates, daily_duration_minutes, focus_timer_direction, note
             FROM todo_items
             WHERE deleted_at IS NULL
             ORDER BY created_at ASC;
@@ -541,10 +545,12 @@ struct DatabaseClient {
                 updatedAt: date(column: 7, statement: statement),
                 taskDate: date(column: 8, statement: statement),
                 cycle: TodoTaskCycle(rawValue: string(column: 9, statement: statement)) ?? .daily,
-                scheduledDates: decodeDateArray(string(column: 10, statement: statement)),
-                dailyDurationMinutes: int(column: 11, statement: statement),
-                focusTimerDirection: FocusTimerDirection(rawValue: string(column: 12, statement: statement)) ?? .countDown,
-                note: string(column: 13, statement: statement)
+                scheduleMode: TodoScheduleMode(rawValue: string(column: 10, statement: statement)),
+                recurrenceValue: optionalInt(column: 11, statement: statement),
+                scheduledDates: decodeDateArray(string(column: 12, statement: statement)),
+                dailyDurationMinutes: int(column: 13, statement: statement),
+                focusTimerDirection: FocusTimerDirection(rawValue: string(column: 14, statement: statement)) ?? .countDown,
+                note: string(column: 15, statement: statement)
             )
         }
     }
@@ -702,9 +708,9 @@ struct DatabaseClient {
         let sql = """
         INSERT INTO todo_items (
           id, plan_id, source_template_id, title, note, is_completed, is_added_to_today, task_date, cycle,
-          scheduled_dates, daily_duration_minutes, focus_timer_direction, created_at, updated_at, deleted_at, sort_order
+          schedule_mode, recurrence_value, scheduled_dates, daily_duration_minutes, focus_timer_direction, created_at, updated_at, deleted_at, sort_order
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?);
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?);
         """
 
         for (index, todo) in todos.enumerated() {
@@ -718,12 +724,14 @@ struct DatabaseClient {
                 bind(todo.isAddedToToday, at: 7, statement: statement)
                 bind(todo.taskDate.databaseString, at: 8, statement: statement)
                 bind(todo.cycle.rawValue, at: 9, statement: statement)
-                bind(encodeDateArray(todo.scheduledDates), at: 10, statement: statement)
-                bind(todo.dailyDurationMinutes, at: 11, statement: statement)
-                bind(todo.focusTimerDirection.rawValue, at: 12, statement: statement)
-                bind(todo.createdAt.databaseString, at: 13, statement: statement)
-                bind(todo.updatedAt.databaseString, at: 14, statement: statement)
-                bind(index, at: 15, statement: statement)
+                bind(todo.scheduleMode.rawValue, at: 10, statement: statement)
+                bindOptional(todo.recurrenceValue, at: 11, statement: statement)
+                bind(encodeDateArray(todo.scheduledDates), at: 12, statement: statement)
+                bind(todo.dailyDurationMinutes, at: 13, statement: statement)
+                bind(todo.focusTimerDirection.rawValue, at: 14, statement: statement)
+                bind(todo.createdAt.databaseString, at: 15, statement: statement)
+                bind(todo.updatedAt.databaseString, at: 16, statement: statement)
+                bind(index, at: 17, statement: statement)
             }
         }
     }
@@ -1041,6 +1049,14 @@ private func bind(_ value: Int, at index: Int32, statement: OpaquePointer) {
     sqlite3_bind_int(statement, index, Int32(value))
 }
 
+private func bindOptional(_ value: Int?, at index: Int32, statement: OpaquePointer) {
+    if let value {
+        bind(value, at: index, statement: statement)
+    } else {
+        sqlite3_bind_null(statement, index)
+    }
+}
+
 private func bind(_ value: Bool, at index: Int32, statement: OpaquePointer) {
     sqlite3_bind_int(statement, index, value ? 1 : 0)
 }
@@ -1052,6 +1068,11 @@ private func string(column: Int32, statement: OpaquePointer) -> String {
 
 private func int(column: Int32, statement: OpaquePointer) -> Int {
     Int(sqlite3_column_int(statement, column))
+}
+
+private func optionalInt(column: Int32, statement: OpaquePointer) -> Int? {
+    guard sqlite3_column_type(statement, column) != SQLITE_NULL else { return nil }
+    return int(column: column, statement: statement)
 }
 
 private func bool(column: Int32, statement: OpaquePointer) -> Bool {

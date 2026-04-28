@@ -45,6 +45,42 @@ enum TodoTaskCycle: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum TodoScheduleMode: String, Codable, CaseIterable, Identifiable {
+    case custom
+    case daily
+    case weekly
+    case monthly
+
+    var id: String { rawValue }
+
+    func title(language: AppLanguage) -> String {
+        switch language {
+        case .english:
+            switch self {
+            case .custom:
+                return "Custom"
+            case .daily:
+                return "Daily"
+            case .weekly:
+                return "Weekly"
+            case .monthly:
+                return "Monthly"
+            }
+        case .chinese:
+            switch self {
+            case .custom:
+                return "自定义"
+            case .daily:
+                return "每天"
+            case .weekly:
+                return "每周"
+            case .monthly:
+                return "每月"
+            }
+        }
+    }
+}
+
 enum FocusTimerDirection: String, Codable, CaseIterable, Identifiable {
     case countDown
     case countUp
@@ -109,6 +145,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var updatedAt: Date
     var taskDate: Date
     var cycle: TodoTaskCycle
+    var scheduleMode: TodoScheduleMode
+    var recurrenceValue: Int?
     var scheduledDates: [Date]
     var dailyDurationMinutes: Int
     var focusTimerDirection: FocusTimerDirection
@@ -125,6 +163,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
         updatedAt: Date,
         taskDate: Date,
         cycle: TodoTaskCycle = .daily,
+        scheduleMode: TodoScheduleMode? = nil,
+        recurrenceValue: Int? = nil,
         scheduledDates: [Date] = [],
         dailyDurationMinutes: Int = 25,
         focusTimerDirection: FocusTimerDirection = .countDown,
@@ -140,7 +180,11 @@ struct TodoItem: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.taskDate = taskDate
         self.cycle = cycle
-        self.scheduledDates = Self.normalizedScheduledDates(from: scheduledDates)
+        let normalizedDates = Self.normalizedScheduledDates(from: scheduledDates)
+        let inferredRule = Self.inferScheduleRule(from: normalizedDates, cycle: cycle, taskDate: taskDate)
+        self.scheduleMode = scheduleMode ?? inferredRule.mode
+        self.recurrenceValue = recurrenceValue ?? inferredRule.value
+        self.scheduledDates = normalizedDates
         self.dailyDurationMinutes = dailyDurationMinutes
         self.focusTimerDirection = focusTimerDirection
         self.note = note
@@ -157,6 +201,8 @@ struct TodoItem: Identifiable, Codable, Equatable {
         case updatedAt
         case taskDate
         case cycle
+        case scheduleMode
+        case recurrenceValue
         case scheduledDates
         case dailyDurationMinutes
         case focusTimerDirection
@@ -175,9 +221,15 @@ struct TodoItem: Identifiable, Codable, Equatable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         taskDate = try container.decode(Date.self, forKey: .taskDate)
         cycle = try container.decodeIfPresent(TodoTaskCycle.self, forKey: .cycle) ?? .daily
-        scheduledDates = Self.normalizedScheduledDates(
+        let decodedDates = Self.normalizedScheduledDates(
             from: try container.decodeIfPresent([Date].self, forKey: .scheduledDates) ?? []
         )
+        let explicitMode = try container.decodeIfPresent(TodoScheduleMode.self, forKey: .scheduleMode)
+        let explicitValue = try container.decodeIfPresent(Int.self, forKey: .recurrenceValue)
+        let inferredRule = Self.inferScheduleRule(from: decodedDates, cycle: cycle, taskDate: taskDate)
+        scheduleMode = explicitMode ?? inferredRule.mode
+        recurrenceValue = explicitValue ?? inferredRule.value
+        scheduledDates = decodedDates
         dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
         focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
@@ -189,6 +241,82 @@ struct TodoItem: Identifiable, Codable, Equatable {
         let unique = Set(normalized.map(\.timeIntervalSinceReferenceDate))
             .map(Date.init(timeIntervalSinceReferenceDate:))
         return unique.sorted()
+    }
+
+    private static func inferScheduleRule(from dates: [Date], cycle: TodoTaskCycle, taskDate: Date) -> (mode: TodoScheduleMode, value: Int?) {
+        let calendar = Calendar.current
+
+        if dates.isEmpty {
+            switch cycle {
+            case .daily:
+                return (.daily, nil)
+            case .weekly:
+                return (.weekly, calendar.component(.weekday, from: taskDate))
+            case .monthly:
+                return (.monthly, calendar.component(.day, from: taskDate))
+            case .manual, .once:
+                return (.custom, nil)
+            }
+        }
+
+        if dates.count >= 3, isDailySeries(dates) {
+            return (.daily, nil)
+        }
+
+        if dates.count >= 3, let weekday = weeklySeriesWeekday(dates) {
+            return (.weekly, weekday)
+        }
+
+        if dates.count >= 3, let day = monthlySeriesDay(dates) {
+            return (.monthly, day)
+        }
+
+        return (.custom, nil)
+    }
+
+    private static func isDailySeries(_ dates: [Date]) -> Bool {
+        let calendar = Calendar.current
+        for pair in zip(dates, dates.dropFirst()) {
+            guard let delta = calendar.dateComponents([.day], from: pair.0, to: pair.1).day, delta == 1 else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private static func weeklySeriesWeekday(_ dates: [Date]) -> Int? {
+        let calendar = Calendar.current
+        guard let first = dates.first else { return nil }
+        let weekday = calendar.component(.weekday, from: first)
+        for pair in zip(dates, dates.dropFirst()) {
+            let currentWeekday = calendar.component(.weekday, from: pair.1)
+            guard currentWeekday == weekday,
+                  let delta = calendar.dateComponents([.day], from: pair.0, to: pair.1).day,
+                  delta == 7
+            else {
+                return nil
+            }
+        }
+        return weekday
+    }
+
+    private static func monthlySeriesDay(_ dates: [Date]) -> Int? {
+        let calendar = Calendar.current
+        guard let first = dates.first else { return nil }
+        let firstDay = calendar.component(.day, from: first)
+
+        for pair in zip(dates, dates.dropFirst()) {
+            let next = pair.1
+            let range = calendar.range(of: .day, in: .month, for: next) ?? 1..<32
+            let expectedDay = min(firstDay, range.upperBound - 1)
+            let actualDay = calendar.component(.day, from: next)
+            let monthDelta = calendar.dateComponents([.month], from: pair.0, to: next).month
+            guard monthDelta == 1, actualDay == expectedDay else {
+                return nil
+            }
+        }
+
+        return firstDay
     }
 }
 
@@ -202,7 +330,7 @@ extension TodoItem {
     }
 
     var hasExplicitSchedule: Bool {
-        !scheduledDates.isEmpty
+        scheduleMode == .custom && !scheduledDates.isEmpty
     }
 
     func normalizedScheduledDates() -> [Date] {
@@ -212,6 +340,17 @@ extension TodoItem {
     }
 
     func scheduleSummary(language: AppLanguage, limit: Int = 3) -> String {
+        switch scheduleMode {
+        case .daily:
+            return scheduleMode.title(language: language)
+        case .weekly:
+            return weeklySummary(language: language)
+        case .monthly:
+            return monthlySummary(language: language)
+        case .custom:
+            break
+        }
+
         let dates = normalizedScheduledDates()
         guard !dates.isEmpty else {
             return cycle.title(language: language)
@@ -229,6 +368,80 @@ extension TodoItem {
             return language == .english ? "\(joined) +\(suffixCount)" : "\(joined) 等\(dates.count)天"
         }
         return joined
+    }
+
+    func editorPreviewDates(from referenceDate: Date = Date()) -> [Date] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: referenceDate)
+
+        switch scheduleMode {
+        case .daily:
+            return (0..<90).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
+        case .weekly:
+            guard let weekday = recurrenceValue else { return normalizedScheduledDates() }
+            return nextWeeklyDates(weekday: weekday, from: start, count: 16)
+        case .monthly:
+            guard let day = recurrenceValue else { return normalizedScheduledDates() }
+            return nextMonthlyDates(day: day, from: start, count: 12)
+        case .custom:
+            return normalizedScheduledDates()
+        }
+    }
+
+    private func weeklySummary(language: AppLanguage) -> String {
+        guard let recurrenceValue else {
+            return scheduleMode.title(language: language)
+        }
+
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        let symbols = language == .english
+            ? (formatter.shortStandaloneWeekdaySymbols ?? formatter.shortWeekdaySymbols ?? [])
+            : (formatter.shortStandaloneWeekdaySymbols ?? formatter.shortWeekdaySymbols ?? [])
+        let index = max(min(recurrenceValue - 1, symbols.count - 1), 0)
+        let day = symbols.isEmpty ? "\(recurrenceValue)" : symbols[index]
+        return language == .english ? "Weekly \(day)" : "每周 \(day)"
+    }
+
+    private func monthlySummary(language: AppLanguage) -> String {
+        guard let recurrenceValue else {
+            return scheduleMode.title(language: language)
+        }
+        return language == .english ? "Monthly \(recurrenceValue)" : "每月 \(recurrenceValue)号"
+    }
+
+    private func nextWeeklyDates(weekday: Int, from start: Date, count: Int) -> [Date] {
+        let calendar = Calendar.current
+        var dates: [Date] = []
+        var cursor = start
+
+        while dates.count < count {
+            if calendar.component(.weekday, from: cursor) == weekday {
+                dates.append(cursor)
+            }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return dates
+    }
+
+    private func nextMonthlyDates(day: Int, from start: Date, count: Int) -> [Date] {
+        let calendar = Calendar.current
+        var dates: [Date] = []
+
+        for offset in 0..<count {
+            guard let monthDate = calendar.date(byAdding: .month, value: offset, to: start),
+                  let monthRange = calendar.range(of: .day, in: .month, for: monthDate),
+                  let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: monthDate))
+            else { continue }
+
+            let targetDay = min(day, monthRange.count)
+            if let targetDate = calendar.date(byAdding: .day, value: targetDay - 1, to: monthStart), targetDate >= start {
+                dates.append(targetDate)
+            }
+        }
+
+        return dates
     }
 }
 

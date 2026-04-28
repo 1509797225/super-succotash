@@ -967,10 +967,10 @@ async function mergeTodo(client, userID, deviceID, change, payload) {
     `
 	    INSERT INTO todo_items (
 	      id, user_id, device_id, plan_id, source_template_id, title, note, is_completed, is_added_to_today,
-	      task_date, cycle, scheduled_dates, daily_duration_minutes, focus_timer_direction, created_at, updated_at,
+	      task_date, cycle, schedule_mode, recurrence_value, scheduled_dates, daily_duration_minutes, focus_timer_direction, created_at, updated_at,
 	      server_updated_at
 	    )
-	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, now())
+	    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, $17, $18, now())
 	    ON CONFLICT (id) DO UPDATE SET
 	      plan_id = EXCLUDED.plan_id,
 	      source_template_id = EXCLUDED.source_template_id,
@@ -980,6 +980,8 @@ async function mergeTodo(client, userID, deviceID, change, payload) {
       is_added_to_today = EXCLUDED.is_added_to_today,
       task_date = EXCLUDED.task_date,
       cycle = EXCLUDED.cycle,
+      schedule_mode = EXCLUDED.schedule_mode,
+      recurrence_value = EXCLUDED.recurrence_value,
       scheduled_dates = EXCLUDED.scheduled_dates,
       daily_duration_minutes = EXCLUDED.daily_duration_minutes,
       focus_timer_direction = EXCLUDED.focus_timer_direction,
@@ -1000,6 +1002,8 @@ async function mergeTodo(client, userID, deviceID, change, payload) {
       payload.isAddedToToday ?? true,
       payload.taskDate ?? change.createdAt,
       payload.cycle ?? "daily",
+      payload.scheduleMode ?? "custom",
+      payload.recurrenceValue ?? null,
       JSON.stringify(payload.scheduledDates ?? []),
       payload.dailyDurationMinutes ?? 25,
 	      payload.focusTimerDirection ?? "countDown",

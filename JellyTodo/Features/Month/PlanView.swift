@@ -121,12 +121,14 @@ struct PlanView: View {
                     store.addPlanItem(
                         title: result.title,
                         to: addingItemTaskID,
-	                        scheduledDates: result.scheduledDates,
-	                        dailyDurationMinutes: result.dailyDurationMinutes,
-	                        focusTimerDirection: result.focusTimerDirection,
-	                        note: result.note
-	                    )
-	                }
+                        scheduleMode: result.scheduleMode,
+                        recurrenceValue: result.recurrenceValue,
+                        scheduledDates: result.scheduledDates,
+                        dailyDurationMinutes: result.dailyDurationMinutes,
+                        focusTimerDirection: result.focusTimerDirection,
+                        note: result.note
+                    )
+                }
             }
         }
         .sheet(item: $selectedTodo) { todo in
@@ -141,12 +143,14 @@ struct PlanView: View {
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
+                    scheduleMode: result.scheduleMode,
+                    recurrenceValue: result.recurrenceValue,
                     scheduledDates: result.scheduledDates,
-	                    dailyDurationMinutes: result.dailyDurationMinutes,
-	                    focusTimerDirection: result.focusTimerDirection,
-	                    note: result.note
-	                )
-	            }
+                    dailyDurationMinutes: result.dailyDurationMinutes,
+                    focusTimerDirection: result.focusTimerDirection,
+                    note: result.note
+                )
+            }
         }
     }
 

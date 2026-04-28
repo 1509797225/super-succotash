@@ -175,6 +175,8 @@ struct CloudTodoItem: Decodable, Equatable {
     let isAddedToToday: Bool
     let taskDate: Date
     let cycle: TodoTaskCycle
+    let scheduleMode: TodoScheduleMode
+    let recurrenceValue: Int?
     let scheduledDates: [Date]
     let dailyDurationMinutes: Int
     let focusTimerDirection: FocusTimerDirection
@@ -192,6 +194,8 @@ struct CloudTodoItem: Decodable, Equatable {
         case isAddedToToday = "is_added_to_today"
         case taskDate = "task_date"
         case cycle
+        case scheduleMode = "schedule_mode"
+        case recurrenceValue = "recurrence_value"
         case scheduledDates = "scheduled_dates"
         case dailyDurationMinutes = "daily_duration_minutes"
         case focusTimerDirection = "focus_timer_direction"
@@ -211,6 +215,8 @@ struct CloudTodoItem: Decodable, Equatable {
         isAddedToToday = try container.decode(Bool.self, forKey: .isAddedToToday)
         taskDate = try container.decode(Date.self, forKey: .taskDate)
         cycle = try container.decodeIfPresent(TodoTaskCycle.self, forKey: .cycle) ?? .daily
+        scheduleMode = try container.decodeIfPresent(TodoScheduleMode.self, forKey: .scheduleMode) ?? .custom
+        recurrenceValue = try container.decodeIfPresent(Int.self, forKey: .recurrenceValue)
         scheduledDates = try container.decodeIfPresent([Date].self, forKey: .scheduledDates) ?? []
         dailyDurationMinutes = try container.decodeIfPresent(Int.self, forKey: .dailyDurationMinutes) ?? 25
         focusTimerDirection = try container.decodeIfPresent(FocusTimerDirection.self, forKey: .focusTimerDirection) ?? .countDown

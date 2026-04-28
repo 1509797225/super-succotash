@@ -182,6 +182,9 @@ struct TodoItem: Identifiable, Codable, Equatable {
     var updatedAt: Date
     var taskDate: Date
     var cycle: TodoTaskCycle
+    var scheduleMode: TodoScheduleMode
+    var recurrenceValue: Int?
+    var scheduledDates: [Date]
     var dailyDurationMinutes: Int
     var focusTimerDirection: FocusTimerDirection
     var note: String
@@ -199,7 +202,10 @@ struct TodoItem: Identifiable, Codable, Equatable {
 - `createdAt`：创建时间
 - `updatedAt`：最近修改时间
 - `taskDate`：任务归属日期；仅 `isAddedToToday = true` 且日期为今天时参与 Today 展示
-- `cycle`：任务周期，驱动 Today 执行实例自动生成
+- `cycle`：历史兼容字段；新逻辑优先使用 `scheduleMode`
+- `scheduleMode`：真实排期模式，支持 `custom / daily / weekly / monthly`
+- `recurrenceValue`：规则值；`weekly` 时表示星期几，`monthly` 时表示每月几号
+- `scheduledDates`：自定义排期日期集合；仅 `custom` 模式下作为真实数据来源
 - `dailyDurationMinutes`：每天计划投入时长，单位分钟
 - `focusTimerDirection`：开始专注时的计时方向，支持倒计时和正计时
 - `note`：任务正文/备注内容
@@ -225,13 +231,13 @@ struct TodoItem: Identifiable, Codable, Equatable {
 - 执行实例继承模板的标题、周期、每日时长、计时方向和正文。
 - 完成 Today 实例只代表完成当天，不会把 Plan item 模板永久完成。
 
-周期语义：
+排期语义：
 
-- `Manual`：不自动生成，只能用户手动加入 Today。
-- `Once`：自动生成一次；如果已经生成过任意日期实例，则不再自动生成。
-- `Daily`：每天生成一条当天实例。
-- `Weekly`：按模板 `taskDate` 所在星期生成；第一版不做多选周几。
-- `Monthly`：按模板 `taskDate` 所在日生成；当月不存在该日时取当月最后一天。
+- `custom`：按 `scheduledDates` 精确命中；适合手动多选日期。
+- `daily`：真正的每日规则，不再预生成未来 90 天日期。
+- `weekly`：真正的每周规则，按 `recurrenceValue` 对应星期生成，不再预生成未来 16 次。
+- `monthly`：真正的每月规则，按 `recurrenceValue` 对应日生成；当月不存在该日时取当月最后一天，不再预生成未来 12 次。
+- `cycle` 保留仅用于旧数据兼容和迁移回退，不再作为主判断依据。
 
 手动加入 Today：
 

@@ -72,6 +72,8 @@ struct TodayView: View {
                 store.updateTodo(id: todo.id, title: result.title)
                 store.updateTodoDetail(
                     id: todo.id,
+                    scheduleMode: result.scheduleMode,
+                    recurrenceValue: result.recurrenceValue,
                     scheduledDates: result.scheduledDates,
                     dailyDurationMinutes: result.dailyDurationMinutes,
                     focusTimerDirection: result.focusTimerDirection,
