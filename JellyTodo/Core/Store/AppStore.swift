@@ -384,6 +384,13 @@ final class AppStore: ObservableObject {
         return (completed, dayTodos.count, focusSeconds)
     }
 
+    func checkInTodos(for date: Date) -> [TodoItem] {
+        let calendar = Calendar.current
+        return todos
+            .filter { $0.isAddedToToday && calendar.isDate($0.taskDate, inSameDayAs: date) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
     func monthCheckInDays(for month: Date) -> [CheckInCalendarDay] {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale.current

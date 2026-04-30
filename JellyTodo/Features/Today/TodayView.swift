@@ -319,6 +319,7 @@ private struct CheckInSheet: View {
 
     let date: Date
     @State private var displayMonth: Date = Date()
+    @State private var selectedDate: Date = Date()
     @State private var showingSharePreview = false
     @State private var shareImage: UIImage?
 
@@ -330,6 +331,7 @@ private struct CheckInSheet: View {
                 checkInCalendarCard
                 heroCheckInCard
                 statsRow
+                taskDetailCard
                 actionRow
             }
             .padding(.horizontal, 20)
@@ -341,6 +343,7 @@ private struct CheckInSheet: View {
         .presentationDragIndicator(.visible)
         .onAppear {
             displayMonth = date
+            selectedDate = date
         }
         .sheet(
             isPresented: Binding(
@@ -368,7 +371,7 @@ private struct CheckInSheet: View {
     }
 
     private var record: DailyCheckInRecord? {
-        store.checkInRecord(on: date)
+        store.checkInRecord(on: selectedDate)
     }
 
     private var checkInCalendarCard: some View {
@@ -422,7 +425,7 @@ private struct CheckInSheet: View {
     private var heroCheckInCard: some View {
         JellyCard {
             VStack(spacing: 16) {
-                Text(record == nil ? (language == .chinese ? "今天待打卡" : "Ready to Check In") : L10n.t(.checkedInToday, language))
+                Text(heroTitle)
                     .font(.system(size: 18 * textScale.typographyScale, weight: .bold, design: .rounded))
                     .foregroundStyle(ThemeTokens.Colors.textSecondary)
 
@@ -454,7 +457,7 @@ private struct CheckInSheet: View {
                         .blur(radius: 10)
                         .offset(x: -18, y: -26)
 
-                    checkInIconImage(for: date, size: 124)
+                    checkInIconImage(for: selectedDate, size: 124)
                         .clipShape(Circle())
                         .opacity(record == nil ? 0.52 : 1)
                         .overlay(
@@ -464,12 +467,12 @@ private struct CheckInSheet: View {
                 }
 
                 VStack(spacing: 8) {
-                    Text(record == nil ? "\(daySummary.completed)/\(daySummary.total)" : "\(store.currentCheckInStreak)")
+                    Text(record == nil ? "\(daySummary.completed)/\(daySummary.total)" : selectedDateTitle)
                         .font(.system(size: 48 * textScale.typographyScale, weight: .bold, design: .rounded))
                         .foregroundStyle(ThemeTokens.Colors.textPrimary)
                         .contentTransition(.numericText())
 
-                    Text(record == nil ? (language == .chinese ? "已完成任务" : "Tasks done") : L10n.t(.checkInDays, language))
+                    Text(record == nil ? (language == .chinese ? "已完成任务" : "Tasks done") : selectedDateSubtitle)
                         .font(ThemeTokens.Typography.caption(for: textScale))
                         .foregroundStyle(ThemeTokens.Colors.textSecondary)
                         .multilineTextAlignment(.center)
@@ -489,9 +492,67 @@ private struct CheckInSheet: View {
         }
     }
 
+    private var taskDetailCard: some View {
+        JellyCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text(language == .chinese ? "任务完成信息" : "Task Details")
+                        .font(.system(size: 18 * textScale.typographyScale, weight: .black, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    Spacer()
+
+                    Text("\(daySummary.completed)/\(daySummary.total)")
+                        .font(.system(size: 14 * textScale.typographyScale, weight: .black, design: .rounded))
+                        .foregroundStyle(ThemeTokens.accent(for: themeMode))
+                        .padding(.horizontal, 10)
+                        .frame(height: 28)
+                        .background(ThemeTokens.accentSoft(for: themeMode).opacity(themeMode.isJelly ? 0.38 : 0.2))
+                        .clipShape(Capsule())
+                }
+
+                if selectedDayTodos.isEmpty {
+                    Text(language == .chinese ? "当天没有 Today 任务记录。" : "No Today tasks were recorded for this day.")
+                        .font(ThemeTokens.Typography.caption(for: textScale))
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.vertical, 8)
+                } else {
+                    VStack(spacing: 10) {
+                        ForEach(selectedDayTodos) { todo in
+                            HStack(spacing: 10) {
+                                Image(systemName: todo.isCompleted ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 16, weight: .black))
+                                    .foregroundStyle(todo.isCompleted ? ThemeTokens.accent(for: themeMode) : ThemeTokens.Colors.textSecondary)
+
+                                Text(todo.title)
+                                    .font(.system(size: 16 * textScale.typographyScale, weight: .bold, design: .rounded))
+                                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                                    .lineLimit(1)
+
+                                Spacer(minLength: 8)
+
+                                Text("\(todo.dailyDurationMinutes)min")
+                                    .font(.system(size: 12 * textScale.typographyScale, weight: .bold, design: .rounded))
+                                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                    .fill(ThemeTokens.card(for: themeMode).opacity(themeMode.isJelly ? 0.74 : 0.92))
+                            )
+                        }
+                    }
+                }
+            }
+            .padding(18)
+        }
+    }
+
     private var actionRow: some View {
         HStack(spacing: 12) {
-            if record == nil {
+            if record == nil && Calendar.current.isDateInToday(selectedDate) {
                 CapsuleButton(
                     title: language == .chinese ? "待会儿再去" : "Later"
                 ) {
@@ -504,7 +565,23 @@ private struct CheckInSheet: View {
                     fill: ThemeTokens.accent(for: themeMode),
                     foreground: .white
                 ) {
-                    store.completeCheckIn(on: date, isMakeUp: false, triggerPresentation: true)
+                    store.completeCheckIn(on: selectedDate, isMakeUp: false, triggerPresentation: true)
+                }
+            } else if record == nil {
+                CapsuleButton(
+                    title: language == .chinese ? "返回今天" : "Back to Today"
+                ) {
+                    selectCheckInDate(Date())
+                    displayMonth = Date()
+                }
+
+                CapsuleButton(
+                    title: language == .chinese ? "关闭" : "Close",
+                    fill: ThemeTokens.accent(for: themeMode),
+                    foreground: .white
+                ) {
+                    dismiss()
+                    store.dismissCheckInCelebration()
                 }
             } else {
                 CapsuleButton(title: L10n.t(.checkedInToday, language)) {
@@ -554,12 +631,14 @@ private struct CheckInSheet: View {
     private func checkInDayCell(_ day: CheckInCalendarDay) -> some View {
         if let date = day.date {
             let isChecked = day.record != nil
-            VStack(spacing: 4) {
+            Button {
+                selectCheckInDate(date)
+            } label: {
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(isChecked ? cellGradient : uncheckedCellFill)
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(day.isToday ? ThemeTokens.accent(for: themeMode) : .white.opacity(themeMode.isJelly ? 0.4 : 0), lineWidth: day.isToday ? 1.8 : 0.8)
+                            .stroke(cellStrokeColor(for: day), lineWidth: cellStrokeWidth(for: day))
                     )
                     .overlay(alignment: .topLeading) {
                         if isChecked {
@@ -590,9 +669,18 @@ private struct CheckInSheet: View {
                         }
                     }
             }
+            .buttonStyle(.plain)
             .frame(height: 46)
+            .scaleEffect(Calendar.current.isDate(date, inSameDayAs: selectedDate) ? 1.04 : 1)
+            .animation(.spring(response: 0.24, dampingFraction: 0.82), value: selectedDate)
         } else {
             Color.clear.frame(height: 46)
+        }
+    }
+
+    private func selectCheckInDate(_ date: Date) {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+            selectedDate = Calendar.current.startOfDay(for: date)
         }
     }
 
@@ -639,7 +727,14 @@ private struct CheckInSheet: View {
     }
 
     private var daySummary: (completed: Int, total: Int, focusSeconds: Int) {
-        store.todayCheckInSummary(for: date)
+        if let record {
+            return (record.completedTodoCount, record.totalTodoCount, record.focusSeconds)
+        }
+        return store.todayCheckInSummary(for: selectedDate)
+    }
+
+    private var selectedDayTodos: [TodoItem] {
+        store.checkInTodos(for: selectedDate)
     }
 
     private func prepareShareCard() {
@@ -720,7 +815,7 @@ private struct CheckInSheet: View {
                             .stroke(.white.opacity(0.82), lineWidth: exportMode ? 4 : 1.8)
                             .padding(exportMode ? 6 : 3)
                             .frame(width: crownSize, height: crownSize)
-                        checkInIconImage(for: date, size: exportMode ? 136 : 74)
+                        checkInIconImage(for: selectedDate, size: exportMode ? 136 : 74)
                             .clipShape(Circle())
                     }
 
@@ -843,7 +938,51 @@ private struct CheckInSheet: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: language.localeIdentifier)
         formatter.dateFormat = language == .english ? "EEEE, MMM d" : "M月d日 EEEE"
-        return formatter.string(from: date)
+        return formatter.string(from: selectedDate)
+    }
+
+    private var heroTitle: String {
+        if record != nil {
+            return language == .chinese ? "已完成打卡" : "Checked In"
+        }
+        if Calendar.current.isDateInToday(selectedDate) {
+            return language == .chinese ? "今天待打卡" : "Ready to Check In"
+        }
+        return language == .chinese ? "当天未打卡" : "No Check-in"
+    }
+
+    private var selectedDateTitle: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: language.localeIdentifier)
+        formatter.dateFormat = language == .english ? "MMM d" : "M月d日"
+        return formatter.string(from: selectedDate)
+    }
+
+    private var selectedDateSubtitle: String {
+        language == .chinese ? "打卡详情" : "Check-in details"
+    }
+
+    private func cellStrokeColor(for day: CheckInCalendarDay) -> Color {
+        guard let date = day.date else {
+            return .clear
+        }
+        if Calendar.current.isDate(date, inSameDayAs: selectedDate) {
+            return ThemeTokens.accent(for: themeMode)
+        }
+        if day.isToday {
+            return ThemeTokens.accent(for: themeMode).opacity(0.72)
+        }
+        return .white.opacity(themeMode.isJelly ? 0.4 : 0)
+    }
+
+    private func cellStrokeWidth(for day: CheckInCalendarDay) -> CGFloat {
+        guard let date = day.date else {
+            return 0
+        }
+        if Calendar.current.isDate(date, inSameDayAs: selectedDate) {
+            return 2.4
+        }
+        return day.isToday ? 1.8 : 0.8
     }
 
     private var selectedCheckInPack: CheckInIconPackOption {

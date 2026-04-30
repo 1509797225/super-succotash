@@ -302,6 +302,7 @@ struct DailyCheckInRecord: Identifiable, Codable, Equatable {
 - 新增任务后不会自动撤销当天已打卡结果，已打卡视为当天已完成一次闭环。
 - 第一阶段补签只支持最近缺失的一天，作为低压力入口。
 - 打卡页主结构固定为：月历、果冻打卡主视觉、连续天数、今日数据、底部 CTA。
+- 打卡页月历日期支持点击切换详情；点击某一天后，主视觉、统计区、任务完成信息和分享卡片均切到该日期的数据。
 - 打卡 icon 使用可配置系列。当前已接入 `涂鸦 Emoji` 系列，6 个素材包，每包 9 个 icon；后续可扩展 `三国噜噜`、`蜡笔鬼灭` 等系列。
 - Set 页提供 `打卡 Icon` 设置项，保存 `seriesID / packID` 到 `AppSettings.checkInIconSelection`。
 - DEBUG 调试浮层提供独立 `打卡` 面板，包含 `Mock 去打卡`、`Mock 已打卡`、30/100/180/365 天打卡桩数据和清理入口。
