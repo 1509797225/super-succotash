@@ -145,6 +145,9 @@ export async function initSchema() {
       haptics_enabled BOOLEAN NOT NULL DEFAULT true,
       pomodoro_goal_per_day INTEGER NOT NULL DEFAULT 4,
       use_large_text BOOLEAN NOT NULL DEFAULT true,
+      text_scale TEXT NOT NULL DEFAULT 'medium',
+      check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji',
+      check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01',
       updated_at TIMESTAMPTZ NOT NULL,
       server_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       version INTEGER NOT NULL DEFAULT 1
@@ -197,6 +200,9 @@ export async function initSchema() {
 	  ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
 	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS plan_title_snapshot TEXT NOT NULL DEFAULT '';
 	    ALTER TABLE pomodoro_sessions ADD COLUMN IF NOT EXISTS todo_title_snapshot TEXT NOT NULL DEFAULT '';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS text_scale TEXT NOT NULL DEFAULT 'medium';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01';
 	  `);
 }
 

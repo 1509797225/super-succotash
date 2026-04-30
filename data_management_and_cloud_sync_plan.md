@@ -17,12 +17,18 @@
 
 - 本地存储：SQLite 第一阶段 + `UserDefaults + Codable` 回滚备份 + 本地恢复点
 - 状态入口：`AppStore`
-- 数据范围：Plan、Today、TodoItem、PomodoroSession、UserProfile、AppSettings、调试插桩数据
+- 数据范围：Plan、Today、TodoItem、PomodoroSession、DailyCheckInRecord、UserProfile、AppSettings、调试插桩数据
 - 云端能力：staging API 已部署，端侧 Debug 入口支持健康检查、只读拉取云测数据，Set 页支持 Pro/mock Pro 手动同步、云端备份点创建、云端恢复点列表和显式恢复
 - 账号体系：Apple 登录一期已接入，专项方案定义在 `account_auth_integration_plan.md`；同步接口仍处于 `userID/deviceID` 兼容阶段，后续迁移到 Bearer token
 - 订阅体系：端侧已接入 StoreKit 2 骨架，服务端已建立 `cloud_entitlements` 权益闸口和 staging 交易同步接口；staging 匿名身份当前自动授予 Pro 同步资格，便于联调
 
-当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，并完成 `change_logs`、本地恢复点、云端备份点、Set 页 `Backup & Sync` 入口、StoreKit 2 端侧骨架、StoreKit staging 交易同步、匿名云身份、服务端权益闸口、staging 手动 push、基础 pull merge 和安全版前台自动同步。正式生产级同步仍未完成，因为还缺 App Store Server API 级交易验签、多设备冲突策略和云端恢复后的“设为新基线”策略。
+当前方案已经从纯 `UserDefaults` 进入 SQLite 迁移第一阶段，并完成 `change_logs`、本地恢复点、云端备份点、Set 页 `Backup & Sync` 入口、StoreKit 2 端侧骨架、StoreKit staging 交易同步、匿名云身份、服务端权益闸口、staging 手动 push、基础 pull merge、安全版前台自动同步、打卡记录快照持久化和打卡 icon 系列设置同步。正式生产级同步仍未完成，因为还缺 App Store Server API 级交易验签、多设备冲突策略和云端恢复后的“设为新基线”策略。
+
+补充：
+
+- `DailyCheckInRecord` 当前通过本地快照 + SQLite `meta` JSON 持久化，不单独拆表；DEBUG 桩数据通过 `sourceTag` 标记，便于单独清理。
+- 打卡 icon 系列选择持久化在 `AppSettings.checkInIconSelection`，SQLite / 云端字段为 `check_in_icon_series_id` 与 `check_in_icon_pack_id`。
+- 云端备份恢复会自动带上打卡记录，因为它已进入 `StorageSnapshot`。
 
 主要风险：
 
@@ -130,12 +136,16 @@ CREATE TABLE plans (
 CREATE TABLE todo_items (
   id TEXT PRIMARY KEY,
   plan_id TEXT,
+  source_template_id TEXT,
   title TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
   is_completed INTEGER NOT NULL DEFAULT 0,
   is_added_to_today INTEGER NOT NULL DEFAULT 1,
   task_date TEXT NOT NULL,
   cycle TEXT NOT NULL DEFAULT 'daily',
+  schedule_mode TEXT NOT NULL DEFAULT 'custom',
+  recurrence_value INTEGER,
+  scheduled_dates TEXT NOT NULL DEFAULT '[]',
   daily_duration_minutes INTEGER NOT NULL DEFAULT 25,
   focus_timer_direction TEXT NOT NULL DEFAULT 'countDown',
   created_at TEXT NOT NULL,
@@ -151,7 +161,10 @@ CREATE TABLE todo_items (
 CREATE TABLE pomodoro_sessions (
   id TEXT PRIMARY KEY,
   todo_id TEXT,
+  source_template_id TEXT,
   plan_id TEXT,
+  plan_title_snapshot TEXT,
+  todo_title_snapshot TEXT,
   type TEXT NOT NULL,
   start_at TEXT NOT NULL,
   end_at TEXT NOT NULL,
@@ -184,9 +197,21 @@ CREATE TABLE app_settings (
   haptics_enabled INTEGER NOT NULL DEFAULT 1,
   pomodoro_goal_per_day INTEGER NOT NULL DEFAULT 4,
   use_large_text INTEGER NOT NULL DEFAULT 1,
+  text_scale TEXT NOT NULL DEFAULT 'medium',
+  check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji',
+  check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01',
   updated_at TEXT NOT NULL
 );
 ```
+
+说明：
+
+- `source_template_id` 用于把 Today 执行实例关联回 Plan item 模板。
+- `schedule_mode / recurrence_value / scheduled_dates` 是当前排期主字段，旧 `cycle` 仅保留兼容。
+- `plan_title_snapshot / todo_title_snapshot` 用于删除任务后仍能在统计中保留历史归属。
+- `text_scale` 对应三档字体：`small / medium / large`。
+- `check_in_icon_series_id / check_in_icon_pack_id` 对应 Set 页打卡 icon 系列选择。
+- `DailyCheckInRecord` 暂不拆独立表，仍保存为 SQLite `meta.check_in_records` 中的 JSON 快照，并进入 `StorageSnapshot` 参与本地/云端备份。
 
 #### change_logs
 

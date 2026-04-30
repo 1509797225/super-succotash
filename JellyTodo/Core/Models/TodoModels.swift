@@ -453,6 +453,38 @@ struct PlanTask: Identifiable, Codable, Equatable {
     var isCollapsed: Bool
 }
 
+struct DailyCheckInRecord: Identifiable, Codable, Equatable {
+    let id: UUID
+    var date: Date
+    var createdAt: Date
+    var completedTodoCount: Int
+    var totalTodoCount: Int
+    var focusSeconds: Int
+    var isMakeUp: Bool
+    var sourceTag: String?
+
+    init(
+        id: UUID = UUID(),
+        date: Date,
+        createdAt: Date = Date(),
+        completedTodoCount: Int,
+        totalTodoCount: Int,
+        focusSeconds: Int,
+        isMakeUp: Bool = false,
+        sourceTag: String? = nil
+    ) {
+        let day = Calendar.current.startOfDay(for: date)
+        self.id = id
+        self.date = day
+        self.createdAt = createdAt
+        self.completedTodoCount = completedTodoCount
+        self.totalTodoCount = totalTodoCount
+        self.focusSeconds = focusSeconds
+        self.isMakeUp = isMakeUp
+        self.sourceTag = sourceTag
+    }
+}
+
 enum PomodoroSessionType: String, Codable, CaseIterable {
     case focus
     case shortBreak
@@ -823,19 +855,127 @@ enum AppTextScale: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+struct CheckInIconSelection: Codable, Equatable {
+    var seriesID: String
+    var packID: String
+
+    static let `default` = CheckInIconSelection(seriesID: "doodleEmoji", packID: "doodle01")
+}
+
+struct CheckInIconSeriesOption: Identifiable, Equatable {
+    let id: String
+    let englishTitle: String
+    let chineseTitle: String
+    let packs: [CheckInIconPackOption]
+
+    func title(language: AppLanguage) -> String {
+        language == .chinese ? chineseTitle : englishTitle
+    }
+}
+
+struct CheckInIconPackOption: Identifiable, Equatable {
+    let id: String
+    let seriesID: String
+    let previewAssetName: String
+    let iconAssetNames: [String]
+    let englishTitle: String
+    let chineseTitle: String
+
+    func title(language: AppLanguage) -> String {
+        language == .chinese ? chineseTitle : englishTitle
+    }
+}
+
+enum CheckInIconCatalog {
+    private static let doodleEmojiPacks: [CheckInIconPackOption] = [
+        CheckInIconPackOption(
+            id: "doodle01",
+            seriesID: "doodleEmoji",
+            previewAssetName: "CheckInSheetDoodle01",
+            iconAssetNames: (1...9).map { "CheckInDoodle01_\($0)" },
+            englishTitle: "Bubble Smile",
+            chineseTitle: "气泡笑脸"
+        ),
+        CheckInIconPackOption(
+            id: "doodle02",
+            seriesID: "doodleEmoji",
+            previewAssetName: "CheckInSheetDoodle02",
+            iconAssetNames: (1...9).map { "CheckInDoodle02_\($0)" },
+            englishTitle: "Friends Party",
+            chineseTitle: "伙伴派对"
+        ),
+        CheckInIconPackOption(
+            id: "doodle03",
+            seriesID: "doodleEmoji",
+            previewAssetName: "CheckInSheetDoodle03",
+            iconAssetNames: (1...9).map { "CheckInDoodle03_\($0)" },
+            englishTitle: "Happy Pop",
+            chineseTitle: "开心蹦跳"
+        ),
+        CheckInIconPackOption(
+            id: "doodle04",
+            seriesID: "doodleEmoji",
+            previewAssetName: "CheckInSheetDoodle04",
+            iconAssetNames: (1...9).map { "CheckInDoodle04_\($0)" },
+            englishTitle: "Animal Mood",
+            chineseTitle: "动物情绪"
+        ),
+        CheckInIconPackOption(
+            id: "doodle05",
+            seriesID: "doodleEmoji",
+            previewAssetName: "CheckInSheetDoodle05",
+            iconAssetNames: (1...9).map { "CheckInDoodle05_\($0)" },
+            englishTitle: "Soft Wink",
+            chineseTitle: "软萌眨眼"
+        ),
+        CheckInIconPackOption(
+            id: "doodle06",
+            seriesID: "doodleEmoji",
+            previewAssetName: "CheckInSheetDoodle06",
+            iconAssetNames: (1...9).map { "CheckInDoodle06_\($0)" },
+            englishTitle: "Funny Drama",
+            chineseTitle: "搞怪戏精"
+        )
+    ]
+
+    static let series: [CheckInIconSeriesOption] = [
+        CheckInIconSeriesOption(
+            id: "doodleEmoji",
+            englishTitle: "Doodle Emoji",
+            chineseTitle: "涂鸦 Emoji",
+            packs: doodleEmojiPacks
+        )
+    ]
+
+    static func seriesOption(for id: String) -> CheckInIconSeriesOption {
+        series.first(where: { $0.id == id }) ?? series[0]
+    }
+
+    static func packOption(for selection: CheckInIconSelection) -> CheckInIconPackOption {
+        if let pack = series
+            .first(where: { $0.id == selection.seriesID })?
+            .packs.first(where: { $0.id == selection.packID }) {
+            return pack
+        }
+        return doodleEmojiPacks[0]
+    }
+}
+
 struct AppSettings: Codable, Equatable {
     var themeMode: AppThemeMode
     var hapticsEnabled: Bool
     var pomodoroGoalPerDay: Int
     var textScale: AppTextScale
     var language: AppLanguage
+    var checkInIconSelection: CheckInIconSelection
 
     static let `default` = AppSettings(
         themeMode: .blackWhite,
         hapticsEnabled: true,
         pomodoroGoalPerDay: 4,
         textScale: .medium,
-        language: .english
+        language: .english,
+        checkInIconSelection: .default
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -845,6 +985,8 @@ struct AppSettings: Codable, Equatable {
         case textScale
         case useLargeText
         case language
+        case checkInIconSeriesID
+        case checkInIconPackID
     }
 
     init(
@@ -852,13 +994,15 @@ struct AppSettings: Codable, Equatable {
         hapticsEnabled: Bool,
         pomodoroGoalPerDay: Int,
         textScale: AppTextScale,
-        language: AppLanguage
+        language: AppLanguage,
+        checkInIconSelection: CheckInIconSelection
     ) {
         self.themeMode = themeMode
         self.hapticsEnabled = hapticsEnabled
         self.pomodoroGoalPerDay = pomodoroGoalPerDay
         self.textScale = textScale
         self.language = language
+        self.checkInIconSelection = checkInIconSelection
     }
 
     init(from decoder: Decoder) throws {
@@ -873,6 +1017,9 @@ struct AppSettings: Codable, Equatable {
             textScale = legacyLarge ? .large : .medium
         }
         language = try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .english
+        let seriesID = try container.decodeIfPresent(String.self, forKey: .checkInIconSeriesID) ?? CheckInIconSelection.default.seriesID
+        let packID = try container.decodeIfPresent(String.self, forKey: .checkInIconPackID) ?? CheckInIconSelection.default.packID
+        checkInIconSelection = CheckInIconSelection(seriesID: seriesID, packID: packID)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -883,6 +1030,8 @@ struct AppSettings: Codable, Equatable {
         try container.encode(textScale, forKey: .textScale)
         try container.encode(textScale == .large, forKey: .useLargeText)
         try container.encode(language, forKey: .language)
+        try container.encode(checkInIconSelection.seriesID, forKey: .checkInIconSeriesID)
+        try container.encode(checkInIconSelection.packID, forKey: .checkInIconPackID)
     }
 }
 

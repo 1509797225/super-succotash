@@ -1,11 +1,17 @@
 import Combine
 import SwiftUI
 
+extension Notification.Name {
+    static let todayCheckInMockActivated = Notification.Name("todayCheckInMockActivated")
+}
+
 @MainActor
 final class AppStore: ObservableObject {
     @Published var todos: [TodoItem] = []
     @Published var planTasks: [PlanTask] = []
     @Published var pomodoroSessions: [PomodoroSession] = []
+    @Published var checkInRecords: [DailyCheckInRecord] = []
+    @Published var presentedCheckInDate: Date?
     @Published var profile: UserProfile = .default
     @Published var settings: AppSettings = .default
     @Published var entitlement: EntitlementState = .default
@@ -101,6 +107,27 @@ final class AppStore: ObservableObject {
         todos.filter { !$0.isCompleted }.count
     }
 
+    var currentCheckInStreak: Int {
+        streak(endingAt: Date())
+    }
+
+    var isCheckInSheetPresented: Bool {
+        presentedCheckInDate != nil
+    }
+
+    var shouldPromptTodayCheckIn: Bool {
+        let summary = todayCheckInSummary()
+        return summary.total > 0 && summary.completed == summary.total && !hasCheckedIn(on: Date())
+    }
+
+    var latestMakeUpCandidate: Date? {
+        let calendar = Calendar.current
+        guard let yesterday = calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: Date())),
+              !hasCheckedIn(on: yesterday)
+        else { return nil }
+        return yesterday
+    }
+
     func loadInitialState() {
         guard !hasLoadedInitialState else { return }
         hasLoadedInitialState = true
@@ -123,6 +150,7 @@ final class AppStore: ObservableObject {
             todos = appState.snapshot.todos
             planTasks = appState.snapshot.planTasks
             pomodoroSessions = appState.snapshot.pomodoroSessions
+            checkInRecords = appState.snapshot.checkInRecords
             profile = appState.snapshot.profile
             settings = appState.snapshot.settings
             entitlement = appState.entitlement
@@ -154,6 +182,7 @@ final class AppStore: ObservableObject {
         )
         todos.append(todo)
         saveTodos()
+        evaluateTodayCheckIn()
         logCloudChange(entityType: "todo_item", entityID: todo.id.uuidString, operation: "create", payload: todo)
     }
 
@@ -289,6 +318,7 @@ final class AppStore: ObservableObject {
         todos[index].note = String(note.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1_000))
         todos[index].updatedAt = Date()
         saveTodos()
+        evaluateTodayCheckIn()
         logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
     }
 
@@ -296,6 +326,7 @@ final class AppStore: ObservableObject {
         let payload = todos.first(where: { $0.id == id })
         todos.removeAll { $0.id == id }
         saveTodos()
+        evaluateTodayCheckIn()
         if let payload {
             logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "delete", payload: payload)
         }
@@ -307,7 +338,76 @@ final class AppStore: ObservableObject {
         todos[index].updatedAt = Date()
         triggerHaptic()
         saveTodos()
+        evaluateTodayCheckIn()
         logCloudChange(entityType: "todo_item", entityID: id.uuidString, operation: "update", payload: todos[index])
+    }
+
+    func dismissCheckInCelebration() {
+        presentedCheckInDate = nil
+    }
+
+    func makeUpLatestMissedDay() {
+        guard let date = latestMakeUpCandidate else { return }
+        completeCheckIn(on: date, isMakeUp: true, triggerPresentation: true)
+    }
+
+    func presentTodayCheckIn() {
+        guard shouldPromptTodayCheckIn else { return }
+        presentCheckInSheet(for: Date())
+    }
+
+    func presentCheckInSheet(for date: Date) {
+        presentedCheckInDate = Calendar.current.startOfDay(for: date)
+    }
+
+    func completeCheckIn(on date: Date, isMakeUp: Bool = false, triggerPresentation: Bool = false) {
+        createOrRefreshCheckIn(for: date, isMakeUp: isMakeUp, triggerPresentation: triggerPresentation)
+    }
+
+    func hasCheckedIn(on date: Date) -> Bool {
+        let calendar = Calendar.current
+        return checkInRecords.contains { calendar.isDate($0.date, inSameDayAs: date) }
+    }
+
+    func checkInRecord(on date: Date) -> DailyCheckInRecord? {
+        let calendar = Calendar.current
+        return checkInRecords.first { calendar.isDate($0.date, inSameDayAs: date) }
+    }
+
+    func todayCheckInSummary(for date: Date = Date()) -> (completed: Int, total: Int, focusSeconds: Int) {
+        let calendar = Calendar.current
+        let dayTodos = todos.filter { $0.isAddedToToday && calendar.isDate($0.taskDate, inSameDayAs: date) }
+        let completed = dayTodos.filter(\.isCompleted).count
+        let focusSeconds = pomodoroSessions
+            .filter { $0.type == .focus && calendar.isDate($0.endAt, inSameDayAs: date) }
+            .reduce(0) { $0 + $1.durationSeconds }
+        return (completed, dayTodos.count, focusSeconds)
+    }
+
+    func monthCheckInDays(for month: Date) -> [CheckInCalendarDay] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = Locale.current
+        calendar.timeZone = .current
+        calendar.firstWeekday = 2
+        let start = calendar.date(from: calendar.dateComponents([.year, .month], from: month)) ?? month
+        let firstWeekday = calendar.component(.weekday, from: start)
+        let leading = (firstWeekday - calendar.firstWeekday + 7) % 7
+        let daysInMonth = calendar.range(of: .day, in: .month, for: start)?.count ?? 30
+        let today = calendar.startOfDay(for: Date())
+
+        var days = (0..<leading).map { CheckInCalendarDay.placeholder("leading-\($0)-\(start.timeIntervalSinceReferenceDate)") }
+        for day in 1...daysInMonth {
+            guard let date = calendar.date(byAdding: .day, value: day - 1, to: start) else { continue }
+            let record = checkInRecord(on: date)
+            let isToday = calendar.isDate(date, inSameDayAs: today)
+            let isMakeUpAvailable = latestMakeUpCandidate.map { calendar.isDate($0, inSameDayAs: date) } ?? false
+            days.append(CheckInCalendarDay(date: date, record: record, isToday: isToday, isMakeUpAvailable: isMakeUpAvailable))
+        }
+
+        while days.count % 7 != 0 {
+            days.append(CheckInCalendarDay.placeholder("trailing-\(days.count)-\(start.timeIntervalSinceReferenceDate)"))
+        }
+        return days
     }
 
     func startPomodoro(
@@ -1252,6 +1352,108 @@ final class AppStore: ObservableObject {
         )
     }
 
+    var debugCheckInSeedSummary: (records: Int, streak: Int, latestDate: Date?) {
+        let debugRecords = checkInRecords.filter { $0.sourceTag == Self.debugCheckInSeedMarker }
+        return (
+            records: debugRecords.count,
+            streak: debugRecords.isEmpty ? 0 : streak(endingAt: Date()),
+            latestDate: debugRecords.map(\.date).max()
+        )
+    }
+
+    func seedCheckInThirtyDayDebugData() {
+        seedCheckInDebugData(totalDays: 30, pattern: .continuous)
+    }
+
+    func seedCheckInHundredDayDebugData() {
+        seedCheckInDebugData(totalDays: 100, pattern: .continuous)
+    }
+
+    func seedCheckInMixedYearDebugData() {
+        seedCheckInDebugData(totalDays: 180, pattern: .mixed)
+    }
+
+    func seedCheckInSparseYearDebugData() {
+        seedCheckInDebugData(totalDays: 365, pattern: .sparse)
+    }
+
+    func clearCheckInDebugData() {
+        checkInRecords.removeAll { $0.sourceTag == Self.debugCheckInSeedMarker }
+        saveCheckIns()
+        triggerHaptic()
+    }
+
+    func seedTodayCheckInPromptDebugState() {
+        clearTodayCheckInMockState()
+
+        let now = Date()
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        checkInRecords.removeAll { calendar.isDate($0.date, inSameDayAs: today) }
+        let titles = ["考研数学收尾", "英语阅读复盘", "专业课错题整理"]
+        let mockTodos = titles.enumerated().map { offset, title in
+            TodoItem(
+                id: UUID(),
+                isAddedToToday: true,
+                title: title,
+                isCompleted: true,
+                createdAt: calendar.date(byAdding: .minute, value: -(titles.count - offset) * 12, to: now) ?? now,
+                updatedAt: now,
+                taskDate: now,
+                cycle: .daily,
+                scheduleMode: .custom,
+                scheduledDates: [calendar.startOfDay(for: now)],
+                dailyDurationMinutes: 45 + offset * 10,
+                focusTimerDirection: .countDown,
+                note: Self.debugTodayCheckInMarker
+            )
+        }
+
+        todos.append(contentsOf: mockTodos)
+        saveTodos()
+        saveCheckIns()
+        evaluateTodayCheckIn()
+        NotificationCenter.default.post(name: .todayCheckInMockActivated, object: nil)
+        triggerHaptic()
+    }
+
+    func seedTodayCheckedInDebugState() {
+        seedTodayCheckInPromptDebugState()
+
+        let day = Calendar.current.startOfDay(for: Date())
+        let summary = todayCheckInSummary(for: day)
+        let record = DailyCheckInRecord(
+            date: day,
+            createdAt: Date(),
+            completedTodoCount: summary.completed,
+            totalTodoCount: summary.total,
+            focusSeconds: summary.focusSeconds,
+            isMakeUp: false,
+            sourceTag: Self.debugTodayCheckInMarker
+        )
+
+        checkInRecords.removeAll {
+            $0.sourceTag == Self.debugTodayCheckInMarker && Calendar.current.isDate($0.date, inSameDayAs: day)
+        }
+        checkInRecords.append(record)
+        checkInRecords.sort { $0.date < $1.date }
+        saveCheckIns()
+        NotificationCenter.default.post(name: .todayCheckInMockActivated, object: nil)
+        triggerHaptic()
+    }
+
+    func clearTodayCheckInMockState() {
+        let today = Calendar.current.startOfDay(for: Date())
+        todos.removeAll { $0.note == Self.debugTodayCheckInMarker }
+        checkInRecords.removeAll {
+            $0.sourceTag == Self.debugTodayCheckInMarker && Calendar.current.isDate($0.date, inSameDayAs: today)
+        }
+        presentedCheckInDate = nil
+        saveTodos()
+        saveCheckIns()
+        triggerHaptic()
+    }
+
     private func replaceCloudStagingData(with response: CloudSyncPullResponse) {
         clearCloudStagingData()
 
@@ -1423,7 +1625,8 @@ final class AppStore: ObservableObject {
                 hapticsEnabled: cloudSettings.hapticsEnabled,
                 pomodoroGoalPerDay: cloudSettings.pomodoroGoalPerDay,
                 textScale: cloudSettings.textScale ?? settings.textScale,
-                language: cloudSettings.language
+                language: cloudSettings.language,
+                checkInIconSelection: cloudSettings.checkInIconSelection ?? settings.checkInIconSelection
             )
             if settings != merged {
                 settings = merged
@@ -1458,7 +1661,15 @@ final class AppStore: ObservableObject {
         todo.note.hasPrefix(cloudStagingSeedMarker)
     }
 
+    private enum DebugCheckInPattern {
+        case continuous
+        case mixed
+        case sparse
+    }
+
     private static let debugPomodoroSeedMarker = "debug-pomodoro-chart-seed"
+    private static let debugCheckInSeedMarker = "debug-checkin-seed"
+    private static let debugTodayCheckInMarker = "debug-today-checkin-seed"
     private static let cloudStagingSeedMarker = "debug-cloud-staging-seed"
 #endif
 
@@ -1758,6 +1969,7 @@ final class AppStore: ObservableObject {
         storage.save(todos, for: .todos)
         storage.save(planTasks, for: .planTasks)
         storage.save(pomodoroSessions, for: .pomodoroSessions)
+        storage.save(checkInRecords, for: .checkInRecords)
         storage.save(profile, for: .userProfile)
         storage.save(settings, for: .appSettings)
     }
@@ -1777,6 +1989,11 @@ final class AppStore: ObservableObject {
         storage.save(pomodoroSessions, for: .pomodoroSessions)
     }
 
+    private func saveCheckIns() {
+        database.saveSnapshot(currentSnapshot())
+        storage.save(checkInRecords, for: .checkInRecords)
+    }
+
     private func saveProfile() {
         database.saveProfile(profile)
         storage.save(profile, for: .userProfile)
@@ -1792,9 +2009,115 @@ final class AppStore: ObservableObject {
             todos: todos,
             planTasks: planTasks,
             pomodoroSessions: pomodoroSessions,
+            checkInRecords: checkInRecords,
             profile: profile,
             settings: settings
         )
+    }
+
+    private func evaluateTodayCheckIn() {
+        let summary = todayCheckInSummary()
+        guard summary.total > 0 else { return }
+        if hasCheckedIn(on: Date()) {
+            createOrRefreshCheckIn(for: Date(), isMakeUp: checkInRecord(on: Date())?.isMakeUp == true, triggerPresentation: false)
+        }
+    }
+
+    private func createOrRefreshCheckIn(for date: Date, isMakeUp: Bool, triggerPresentation: Bool) {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        let summary = todayCheckInSummary(for: day)
+        let record = DailyCheckInRecord(
+            id: checkInRecord(on: day)?.id ?? UUID(),
+            date: day,
+            createdAt: Date(),
+            completedTodoCount: max(summary.completed, 0),
+            totalTodoCount: max(summary.total, summary.completed),
+            focusSeconds: summary.focusSeconds,
+            isMakeUp: isMakeUp,
+            sourceTag: checkInRecord(on: day)?.sourceTag
+        )
+
+        if let index = checkInRecords.firstIndex(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
+            checkInRecords[index] = record
+        } else {
+            checkInRecords.append(record)
+            checkInRecords.sort { $0.date < $1.date }
+        }
+
+        saveCheckIns()
+        if triggerPresentation {
+            presentedCheckInDate = day
+        }
+        triggerHaptic()
+    }
+
+    private func seedCheckInDebugData(totalDays: Int, pattern: DebugCheckInPattern) {
+        clearCheckInDebugData()
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var seededRecords: [DailyCheckInRecord] = []
+        var cursor = 0
+
+        while seededRecords.count < totalDays {
+            guard let date = calendar.date(byAdding: .day, value: -cursor, to: today) else { break }
+            let includeDay: Bool
+
+            switch pattern {
+            case .continuous:
+                includeDay = true
+            case .mixed:
+                includeDay = (cursor % 9 != 4) && (cursor % 13 != 7)
+            case .sparse:
+                includeDay = cursor % 2 == 0 || cursor % 7 == 0
+            }
+
+            if includeDay, !checkInRecords.contains(where: { calendar.isDate($0.date, inSameDayAs: date) }) {
+                let completed = max(1, 1 + ((cursor * 3) % 6))
+                let total = max(completed, completed + (cursor % 3 == 0 ? 1 : 0))
+                let focusMinutes = max(20, completed * 18 + (cursor % 5) * 12)
+                seededRecords.append(
+                    DailyCheckInRecord(
+                        date: date,
+                        createdAt: date.addingTimeInterval(21 * 60 * 60),
+                        completedTodoCount: completed,
+                        totalTodoCount: total,
+                        focusSeconds: focusMinutes * 60,
+                        isMakeUp: pattern != .continuous && cursor % 11 == 0,
+                        sourceTag: Self.debugCheckInSeedMarker
+                    )
+                )
+            }
+
+            cursor += 1
+            if cursor > totalDays * 3 { break }
+        }
+
+        checkInRecords.append(contentsOf: seededRecords)
+        checkInRecords.sort { $0.date < $1.date }
+        saveCheckIns()
+        triggerHaptic()
+    }
+
+    private func streak(endingAt referenceDate: Date) -> Int {
+        let calendar = Calendar.current
+        let availableDays = Set(checkInRecords.map { calendar.startOfDay(for: $0.date).timeIntervalSinceReferenceDate })
+        var streak = 0
+        var cursor = calendar.startOfDay(for: referenceDate)
+
+        if !availableDays.contains(cursor.timeIntervalSinceReferenceDate),
+           let yesterday = calendar.date(byAdding: .day, value: -1, to: cursor),
+           availableDays.contains(yesterday.timeIntervalSinceReferenceDate) {
+            cursor = yesterday
+        }
+
+        while availableDays.contains(cursor.timeIntervalSinceReferenceDate) {
+            streak += 1
+            guard let previous = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
+            cursor = previous
+        }
+        return streak
     }
 
     private func recordSyncHistory(
@@ -1898,5 +2221,31 @@ final class AppStore: ObservableObject {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
 #endif
+    }
+}
+
+struct CheckInCalendarDay: Identifiable, Equatable {
+    let id: String
+    let date: Date?
+    let record: DailyCheckInRecord?
+    let isToday: Bool
+    let isMakeUpAvailable: Bool
+
+    init(
+        id: String? = nil,
+        date: Date?,
+        record: DailyCheckInRecord?,
+        isToday: Bool,
+        isMakeUpAvailable: Bool
+    ) {
+        self.id = id ?? date.map { "date-\(Int($0.timeIntervalSince1970))" } ?? UUID().uuidString
+        self.date = date
+        self.record = record
+        self.isToday = isToday
+        self.isMakeUpAvailable = isMakeUpAvailable
+    }
+
+    static func placeholder(_ id: String) -> CheckInCalendarDay {
+        CheckInCalendarDay(id: id, date: nil, record: nil, isToday: false, isMakeUpAvailable: false)
     }
 }

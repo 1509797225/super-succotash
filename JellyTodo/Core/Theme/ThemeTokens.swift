@@ -47,6 +47,9 @@ enum L10n {
         case about
         case bigJelly
         case breakTime
+        case checkIn
+        case checkInDays
+        case checkedInToday
         case cancel
         case closeSettingsMenu
         case completed
@@ -81,6 +84,8 @@ enum L10n {
         case noPomodoroData
         case noPomodoroGuide
         case noPlansYet
+        case makeUpCheckIn
+        case monthlyCheckIn
         case pause
         case openSettingsMenu
         case paused
@@ -97,6 +102,7 @@ enum L10n {
         case running
         case rotate
         case save
+        case shareCard
         case set
         case settings
         case small
@@ -108,6 +114,7 @@ enum L10n {
         case todayFocusChart
         case todayIsClear
         case todaySwipeAction
+        case totalTasks
         case timer
         case timerDirection
         case taskCycle
@@ -125,6 +132,9 @@ enum L10n {
             case .about: return "About"
             case .bigJelly: return "Big Jelly"
             case .breakTime: return "Break Time"
+            case .checkIn: return "Check In"
+            case .checkInDays: return "day streak"
+            case .checkedInToday: return "Checked in today"
             case .cancel: return "Cancel"
             case .closeSettingsMenu: return "Close settings menu"
             case .completed: return "Completed"
@@ -159,6 +169,8 @@ enum L10n {
             case .noPomodoroData: return "No pomodoro data"
             case .noPomodoroGuide: return "Complete a focus session to see stats"
             case .noPlansYet: return "No plans yet"
+            case .makeUpCheckIn: return "Make Up"
+            case .monthlyCheckIn: return "Monthly Check-in"
             case .pause: return "Pause"
             case .openSettingsMenu: return "Open settings menu"
             case .paused: return "Paused"
@@ -175,6 +187,7 @@ enum L10n {
             case .running: return "Running"
             case .rotate: return "Rotate"
             case .save: return "Save"
+            case .shareCard: return "Share Card"
             case .set: return "Set"
             case .settings: return "Settings"
             case .small: return "Small"
@@ -186,6 +199,7 @@ enum L10n {
             case .todayFocusChart: return "Today focus chart"
             case .todayIsClear: return "Today is clear"
             case .todaySwipeAction: return "Today"
+            case .totalTasks: return "Total Tasks"
             case .timer: return "Timer"
             case .timerDirection: return "Timer Direction"
             case .taskCycle: return "Task Cycle"
@@ -205,6 +219,9 @@ enum L10n {
             case .about: return "关于"
             case .bigJelly: return "大果冻"
             case .breakTime: return "休息时长"
+            case .checkIn: return "打卡"
+            case .checkInDays: return "连续天数"
+            case .checkedInToday: return "今日已打卡"
             case .cancel: return "取消"
             case .closeSettingsMenu: return "关闭设置菜单"
             case .completed: return "已完成"
@@ -239,6 +256,8 @@ enum L10n {
             case .noPomodoroData: return "暂无番茄数据"
             case .noPomodoroGuide: return "完成一次专注后查看统计"
             case .noPlansYet: return "还没有计划"
+            case .makeUpCheckIn: return "补签"
+            case .monthlyCheckIn: return "月度打卡"
             case .pause: return "暂停"
             case .openSettingsMenu: return "打开设置菜单"
             case .paused: return "已暂停"
@@ -255,6 +274,7 @@ enum L10n {
             case .running: return "运行中"
             case .rotate: return "旋转"
             case .save: return "保存"
+            case .shareCard: return "分享卡片"
             case .set: return "设置"
             case .settings: return "设置"
             case .small: return "缩小"
@@ -266,6 +286,7 @@ enum L10n {
             case .todayFocusChart: return "今日专注图表"
             case .todayIsClear: return "今日很清爽"
             case .todaySwipeAction: return "加入今日"
+            case .totalTasks: return "任务总数"
             case .timer: return "计时器"
             case .timerDirection: return "计时方向"
             case .taskCycle: return "任务周期"

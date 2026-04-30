@@ -260,6 +260,7 @@ struct CloudAppSettings: Decodable, Equatable {
     let hapticsEnabled: Bool
     let pomodoroGoalPerDay: Int
     let textScale: AppTextScale?
+    let checkInIconSelection: CheckInIconSelection?
     let updatedAt: Date
 
     private enum CodingKeys: String, CodingKey {
@@ -269,6 +270,8 @@ struct CloudAppSettings: Decodable, Equatable {
         case pomodoroGoalPerDay = "pomodoro_goal_per_day"
         case textScale = "text_scale"
         case useLargeText = "use_large_text"
+        case checkInIconSeriesID = "check_in_icon_series_id"
+        case checkInIconPackID = "check_in_icon_pack_id"
         case updatedAt = "updated_at"
     }
 
@@ -283,6 +286,13 @@ struct CloudAppSettings: Decodable, Equatable {
         } else {
             let legacyLarge = try container.decodeIfPresent(Bool.self, forKey: .useLargeText) ?? false
             textScale = legacyLarge ? .large : .medium
+        }
+        let seriesID = try container.decodeIfPresent(String.self, forKey: .checkInIconSeriesID)
+        let packID = try container.decodeIfPresent(String.self, forKey: .checkInIconPackID)
+        if let seriesID, let packID {
+            checkInIconSelection = CheckInIconSelection(seriesID: seriesID, packID: packID)
+        } else {
+            checkInIconSelection = nil
         }
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }

@@ -3,6 +3,7 @@ import SwiftUI
 #if DEBUG
 private enum DebugPanel: Identifiable {
     case seed
+    case checkIn
     case cloud
     case database
 
@@ -10,6 +11,8 @@ private enum DebugPanel: Identifiable {
         switch self {
         case .seed:
             return "seed"
+        case .checkIn:
+            return "checkIn"
         case .cloud:
             return "cloud"
         case .database:
@@ -63,6 +66,11 @@ struct DebugPomodoroSeedOverlay: View {
                     .environmentObject(store)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
+            case .checkIn:
+                DebugCheckInSheet()
+                    .environmentObject(store)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
             case .cloud:
                 DebugCloudSheet()
                     .environmentObject(store)
@@ -81,6 +89,11 @@ struct DebugPomodoroSeedOverlay: View {
         VStack(spacing: 10) {
             debugActionButton(title: "统计", systemImage: "chart.pie.fill") {
                 activePanel = .seed
+                isExpanded = false
+            }
+
+            debugActionButton(title: "打卡", systemImage: "calendar.badge.checkmark") {
+                activePanel = .checkIn
                 isExpanded = false
             }
 
@@ -193,7 +206,7 @@ struct DebugPomodoroSeedOverlay: View {
 
     private func menuPosition(in size: CGSize) -> CGPoint {
         let buttonPosition = currentButtonPosition(in: size)
-        let menuHeight: CGFloat = 292
+        let menuHeight: CGFloat = 358
         let buttonRadius: CGFloat = 36
         let gap: CGFloat = 14
         let lowerLimit = menuHeight / 2 + 20
@@ -297,6 +310,132 @@ private struct DebugPomodoroSeedSheet: View {
                         minWidth: 220
                     ) {
                         store.seedPlanTodayHeavyPressureDebugData()
+                    }
+                }
+
+                CapsuleButton(title: "关闭") {
+                    dismiss()
+                }
+
+                Spacer(minLength: 0)
+            }
+            .padding(24)
+        }
+        .background(ThemeTokens.background(for: themeMode).ignoresSafeArea())
+    }
+}
+
+private struct DebugCheckInSheet: View {
+    @EnvironmentObject private var store: AppStore
+    @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let summary = store.debugCheckInSeedSummary
+
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("打卡调试")
+                    .font(ThemeTokens.Typography.pageTitle)
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+
+                Text("这里只测试打卡链路和打卡日历桩数据。Mock 去打卡只会制造“任务已完成但未打卡”的状态，需要你进入打卡页后手动完成打卡才会落图标。")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                JellyCard {
+                    VStack(spacing: 0) {
+                        debugRow(title: "打卡桩记录", value: "\(summary.records)")
+                        Divider().overlay(ThemeTokens.Colors.subtleLine)
+                        debugRow(title: "当前连续", value: "\(summary.streak) 天")
+                        Divider().overlay(ThemeTokens.Colors.subtleLine)
+                        debugRow(
+                            title: "最近日期",
+                            value: summary.latestDate.map {
+                                let formatter = DateFormatter()
+                                formatter.dateFormat = "MM-dd"
+                                return formatter.string(from: $0)
+                            } ?? "--"
+                        )
+                    }
+                    .padding(20)
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("今日链路")
+                        .font(ThemeTokens.Typography.body)
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    HStack(spacing: 12) {
+                        CapsuleButton(
+                            title: "Mock 去打卡",
+                            fill: ThemeTokens.accentSoft(for: themeMode),
+                            minWidth: 124
+                        ) {
+                            store.seedTodayCheckInPromptDebugState()
+                        }
+
+                        CapsuleButton(
+                            title: "Mock 已打卡",
+                            fill: ThemeTokens.accent(for: themeMode),
+                            foreground: ThemeTokens.Colors.backgroundPrimary,
+                            minWidth: 124
+                        ) {
+                            store.seedTodayCheckedInDebugState()
+                        }
+                    }
+
+                    CapsuleButton(title: "清理 Mock 打卡") {
+                        store.clearTodayCheckInMockState()
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("日历压力")
+                        .font(ThemeTokens.Typography.body)
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    HStack(spacing: 12) {
+                        CapsuleButton(
+                            title: "打卡 30 天",
+                            fill: ThemeTokens.accentSoft(for: themeMode),
+                            minWidth: 110
+                        ) {
+                            store.seedCheckInThirtyDayDebugData()
+                        }
+
+                        CapsuleButton(
+                            title: "打卡 100 天",
+                            fill: ThemeTokens.accentSoft(for: themeMode),
+                            minWidth: 118
+                        ) {
+                            store.seedCheckInHundredDayDebugData()
+                        }
+                    }
+
+                    HStack(spacing: 12) {
+                        CapsuleButton(
+                            title: "混合 180 天",
+                            fill: ThemeTokens.accentSoft(for: themeMode),
+                            minWidth: 118
+                        ) {
+                            store.seedCheckInMixedYearDebugData()
+                        }
+
+                        CapsuleButton(
+                            title: "稀疏 365 天",
+                            fill: ThemeTokens.accentSoft(for: themeMode),
+                            minWidth: 118
+                        ) {
+                            store.seedCheckInSparseYearDebugData()
+                        }
+                    }
+
+                    CapsuleButton(title: "清理打卡桩数据") {
+                        store.clearCheckInDebugData()
                     }
                 }
 

@@ -267,6 +267,7 @@ struct DatabaseClient {
             try replacePlanTasks(snapshot.planTasks, in: database)
             try replaceTodos(snapshot.todos, in: database)
             try replaceSessions(snapshot.pomodoroSessions, in: database)
+            try replaceCheckInRecords(snapshot.checkInRecords, in: database)
             try replaceProfile(snapshot.profile, in: database)
             try replaceSettings(snapshot.settings, in: database)
         }
@@ -420,6 +421,8 @@ struct DatabaseClient {
               pomodoro_goal_per_day INTEGER NOT NULL DEFAULT 4,
               use_large_text INTEGER NOT NULL DEFAULT 1,
               text_scale TEXT NOT NULL DEFAULT 'medium',
+              check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji',
+              check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01',
               updated_at TEXT NOT NULL
             );
 
@@ -479,6 +482,8 @@ struct DatabaseClient {
         try addColumnIfMissing("plan_title_snapshot", definition: "TEXT NOT NULL DEFAULT ''", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("todo_title_snapshot", definition: "TEXT NOT NULL DEFAULT ''", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("text_scale", definition: "TEXT NOT NULL DEFAULT 'medium'", to: "app_settings", in: database)
+        try addColumnIfMissing("check_in_icon_series_id", definition: "TEXT NOT NULL DEFAULT 'doodleEmoji'", to: "app_settings", in: database)
+        try addColumnIfMissing("check_in_icon_pack_id", definition: "TEXT NOT NULL DEFAULT 'doodle01'", to: "app_settings", in: database)
     }
 
     private func migrateLegacyIfNeeded(_ legacySnapshot: StorageSnapshot, in database: OpaquePointer) throws {
@@ -489,6 +494,7 @@ struct DatabaseClient {
                 try replacePlanTasks(legacySnapshot.planTasks, in: database)
                 try replaceTodos(legacySnapshot.todos, in: database)
                 try replaceSessions(legacySnapshot.pomodoroSessions, in: database)
+                try replaceCheckInRecords(legacySnapshot.checkInRecords, in: database)
                 try replaceProfile(legacySnapshot.profile, in: database)
                 try replaceSettings(legacySnapshot.settings, in: database)
                 try setMetaValue("true", for: "legacy_migrated_v1", in: database)
@@ -503,9 +509,20 @@ struct DatabaseClient {
             todos: try readTodos(from: database),
             planTasks: try readPlanTasks(from: database),
             pomodoroSessions: try readSessions(from: database),
+            checkInRecords: try readCheckInRecords(from: database),
             profile: try readProfile(from: database),
             settings: try readSettings(from: database)
         )
+    }
+
+    private func readCheckInRecords(from database: OpaquePointer) throws -> [DailyCheckInRecord] {
+        guard let value = try metaValue(for: "check_in_records", in: database),
+              let data = value.data(using: .utf8)
+        else { return [] }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([DailyCheckInRecord].self, from: data)
     }
 
     private func readPlanTasks(from database: OpaquePointer) throws -> [PlanTask] {
@@ -598,7 +615,7 @@ struct DatabaseClient {
     private func readSettings(from database: OpaquePointer) throws -> AppSettings {
         let result = try rows(
             sql: """
-            SELECT theme_mode, haptics_enabled, pomodoro_goal_per_day, use_large_text, language, text_scale
+            SELECT theme_mode, haptics_enabled, pomodoro_goal_per_day, use_large_text, language, text_scale, check_in_icon_series_id, check_in_icon_pack_id
             FROM app_settings
             WHERE id = 'current'
             LIMIT 1;
@@ -610,7 +627,11 @@ struct DatabaseClient {
                 hapticsEnabled: bool(column: 1, statement: statement),
                 pomodoroGoalPerDay: int(column: 2, statement: statement),
                 textScale: AppTextScale(rawValue: string(column: 5, statement: statement)) ?? (bool(column: 3, statement: statement) ? .large : .medium),
-                language: AppLanguage(rawValue: string(column: 4, statement: statement)) ?? .english
+                language: AppLanguage(rawValue: string(column: 4, statement: statement)) ?? .english,
+                checkInIconSelection: CheckInIconSelection(
+                    seriesID: string(column: 6, statement: statement).isEmpty ? CheckInIconSelection.default.seriesID : string(column: 6, statement: statement),
+                    packID: string(column: 7, statement: statement).isEmpty ? CheckInIconSelection.default.packID : string(column: 7, statement: statement)
+                )
             )
         }
         return result.first ?? .default
@@ -764,6 +785,14 @@ struct DatabaseClient {
         }
     }
 
+    private func replaceCheckInRecords(_ records: [DailyCheckInRecord], in database: OpaquePointer) throws {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(records)
+        guard let value = String(data: data, encoding: .utf8) else { return }
+        try setMetaValue(value, for: "check_in_records", in: database)
+    }
+
     private func replaceProfile(_ profile: UserProfile, in database: OpaquePointer) throws {
         try run(
             sql: """
@@ -783,9 +812,9 @@ struct DatabaseClient {
         try run(
             sql: """
             INSERT OR REPLACE INTO app_settings (
-              id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day, use_large_text, text_scale, updated_at
+              id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day, use_large_text, text_scale, check_in_icon_series_id, check_in_icon_pack_id, updated_at
             )
-            VALUES ('current', ?, ?, ?, ?, ?, ?, ?);
+            VALUES ('current', ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             in: database
         ) { statement in
@@ -795,7 +824,9 @@ struct DatabaseClient {
             bind(settings.pomodoroGoalPerDay, at: 4, statement: statement)
             bind(settings.textScale == .large, at: 5, statement: statement)
             bind(settings.textScale.rawValue, at: 6, statement: statement)
-            bind(Date().databaseString, at: 7, statement: statement)
+            bind(settings.checkInIconSelection.seriesID, at: 7, statement: statement)
+            bind(settings.checkInIconSelection.packID, at: 8, statement: statement)
+            bind(Date().databaseString, at: 9, statement: statement)
         }
     }
 

@@ -152,6 +152,97 @@ private struct AppIconPickerSheet: View {
     }
 }
 
+private struct CheckInIconPickerSheet: View {
+    let selectedSelection: CheckInIconSelection
+    let onSelect: (CheckInIconSelection) -> Void
+
+    @Environment(\.appThemeMode) private var themeMode
+    @Environment(\.appLanguage) private var language
+    @Environment(\.dismiss) private var dismiss
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 14),
+        GridItem(.flexible(), spacing: 14)
+    ]
+
+    var body: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                Text(language == .chinese ? "打卡 Icon" : "Check-in Icons")
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                    .padding(.top, 10)
+
+                Text(language == .chinese ? "当前先支持涂鸦 Emoji 系列，后续可以继续扩展更多系列。" : "Doodle Emoji is ready first. More icon families can be added later.")
+                    .font(ThemeTokens.Typography.caption)
+                    .foregroundStyle(ThemeTokens.Colors.textSecondary)
+
+                ForEach(CheckInIconCatalog.series) { series in
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text(series.title(language: language))
+                            .font(.system(size: 18, weight: .black, design: .rounded))
+                            .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                        LazyVGrid(columns: columns, spacing: 14) {
+                            ForEach(series.packs) { pack in
+                                Button {
+                                    onSelect(CheckInIconSelection(seriesID: series.id, packID: pack.id))
+                                    dismiss()
+                                } label: {
+                                    JellyCard {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            Image(pack.previewAssetName)
+                                                .resizable()
+                                                .aspectRatio(1, contentMode: .fill)
+                                                .frame(height: 138)
+                                                .clipped()
+                                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                                            Text(pack.title(language: language))
+                                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                                .foregroundStyle(ThemeTokens.Colors.textPrimary)
+                                                .lineLimit(1)
+
+                                            HStack {
+                                                Spacer()
+                                                Text(isCurrent(pack) ? localized("Current", "当前") : localized("Use", "使用"))
+                                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                                    .foregroundStyle(isCurrent(pack) ? ThemeTokens.Colors.backgroundPrimary : ThemeTokens.Colors.textPrimary)
+                                                    .padding(.horizontal, 10)
+                                                    .frame(height: 28)
+                                                    .background(isCurrent(pack) ? ThemeTokens.accent(for: themeMode) : ThemeTokens.card(for: themeMode))
+                                                    .clipShape(Capsule())
+                                            }
+                                        }
+                                        .padding(16)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+
+                CapsuleButton(title: L10n.t(.cancel, language)) {
+                    dismiss()
+                }
+            }
+            .padding(24)
+        }
+        .background(ThemeTokens.background(for: themeMode).ignoresSafeArea())
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    private func isCurrent(_ pack: CheckInIconPackOption) -> Bool {
+        selectedSelection.seriesID == pack.seriesID && selectedSelection.packID == pack.id
+    }
+
+    private func localized(_ english: String, _ chinese: String) -> String {
+        language == .chinese ? chinese : english
+    }
+}
+
 private struct ProfileEditorSheet: View {
     let profile: UserProfile
     let onSave: (UserProfile) -> Void
@@ -527,6 +618,7 @@ struct SetView: View {
     @State private var showingThemePicker = false
     @State private var showingLanguagePicker = false
     @State private var showingAppIconPicker = false
+    @State private var showingCheckInIconPicker = false
     @State private var showingBackupPoints = false
     @State private var showingCloudBackupPoints = false
     @State private var backupPendingRestore: LocalBackupSnapshot?
@@ -581,6 +673,13 @@ struct SetView: View {
         .sheet(isPresented: $showingAppIconPicker) {
             AppIconPickerSheet(selectedIconID: selectedAppIconID) { option in
                 applyAppIcon(option)
+            }
+        }
+        .sheet(isPresented: $showingCheckInIconPicker) {
+            CheckInIconPickerSheet(selectedSelection: store.settings.checkInIconSelection) { selection in
+                var updated = store.settings
+                updated.checkInIconSelection = selection
+                store.updateSettings(updated)
             }
         }
         .confirmationDialog(L10n.t(.theme, language), isPresented: $showingThemePicker, titleVisibility: .visible) {
@@ -961,6 +1060,20 @@ struct SetView: View {
                     title: L10n.t(.appIcon, language),
                     value: currentAppIcon.title(language: language),
                     badge: "NEW",
+                    showsChevron: true
+                )
+            }
+            .buttonStyle(.plain)
+
+            settingDivider
+
+            Button {
+                showingCheckInIconPicker = true
+            } label: {
+                settingLine(
+                    icon: "face.smiling.fill",
+                    title: backupText(english: "Check-in Icons", chinese: "打卡 Icon"),
+                    value: currentCheckInSeries.title(language: language),
                     showsChevron: true
                 )
             }
@@ -1350,6 +1463,14 @@ struct SetView: View {
 #else
         .default
 #endif
+    }
+
+    private var currentCheckInPack: CheckInIconPackOption {
+        CheckInIconCatalog.packOption(for: store.settings.checkInIconSelection)
+    }
+
+    private var currentCheckInSeries: CheckInIconSeriesOption {
+        CheckInIconCatalog.seriesOption(for: currentCheckInPack.seriesID)
     }
 
     private var settingDivider: some View {

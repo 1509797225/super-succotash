@@ -40,6 +40,7 @@
 - Todo 任务新增、编辑、删除、完成切换
 - Plan / Today / Set 三个一级页面
 - Today 页顶部番茄钟统计入口
+- Today 全完成后触发居中打卡引导；用户进入打卡页并点击完成打卡后，才创建当天打卡记录和日历 icon
 - 完整番茄钟计时能力，时长来自任务自身的 `Daily Duration`，不再使用固定 Focus / Short Break / Long Break 时长配置
 - 任务周期闭环：Plan item 作为长期模板，Today task 作为某一天的执行实例；周期规则自动生成当天实例
 - 本地任务持久化
@@ -48,16 +49,17 @@
 
 ### 2.4 非 MVP 范围
 
-- 账号登录/注册
-- 云同步
-- 订阅购买和订阅状态校验
-- 多端同步
+- 正式生产账号登录/注册
+- 正式生产云同步
+- 正式订阅购买和 App Store Server API 级订阅状态校验
+- 生产级多端同步
 - 任务标签、优先级、复杂筛选
 - 深色模式大改版
 - 社交、协作、分享
 
 说明：
-`Set` 页中的“个人账户设置”在 MVP 内定义为本地个人资料设置，不接真实账号系统，不接服务端。
+说明：
+`Set` 页中的“个人账户设置”在当前阶段仍以本地个人资料和开发期账号联调为主；Apple 登录一期代码已接入，但免费开发者账号阶段默认不启用 Sign in with Apple entitlement，生产级账号、订阅验签和多设备同步仍未完成。
 
 ### 2.5 订阅能力边界
 
@@ -109,9 +111,9 @@
 - UI：SwiftUI
 - 架构：MVVM + 单向数据流
 - 路由：`NavigationStack`
-- 本地存储：`UserDefaults` + `Codable`
-- 数据升级方向：`SQLite + GRDB`
-- 云端升级方向：`PostgreSQL + Backend API + Docker Compose`
+- 本地存储：SQLite 第一阶段 + `Codable` 快照回滚备份
+- 数据升级方向：在当前 SQLite 表结构上引入 Repository / GRDB
+- 云端升级方向：已部署 staging `PostgreSQL + Backend API`，生产环境仍需完善鉴权、冲突和验签
 - 订阅升级方向：`StoreKit 2 + EntitlementState`
 - 状态管理：`ObservableObject` / `@Published`
 - 动画：SwiftUI 原生动画
@@ -120,8 +122,8 @@
 ### 4.2 选型原因
 
 - SwiftUI 适合快速构建大圆角、大留白、拟态卡片视觉
-- `UserDefaults` 足够承载 MVP 的本地轻量数据，但不作为长期复杂业务数据方案
-- 后续 Plan、Today、Pomodoro Session、统计和云同步扩展应迁移到 `SQLite + GRDB`
+- 当前已经从纯 `UserDefaults` 进入 SQLite 第一阶段；`UserDefaults + Codable` 只保留为回滚备份和旧数据兼容路径
+- 后续 Plan、Today、Pomodoro Session、统计和云同步扩展应继续收敛到 Repository / GRDB 层
 - `Codable` 可让 Todo、设置、番茄钟统计统一序列化
 - `NavigationStack` 足够支撑 Today 到 Pomodoro Stats 的二级跳转
 
@@ -157,7 +159,7 @@ App
 
 - `Core/Models`：定义 Todo、设置、番茄记录等数据模型
 - `Core/Store`：统一承接业务状态和页面数据分发
-- `Core/Storage`：封装 `UserDefaults` 读写
+- `Core/Storage`：封装 `UserDefaults` 备份和旧数据兼容读写
 - `Core/Database`：封装本地 SQLite 建表、迁移和读写；当前第一阶段使用系统 `SQLite3`，后续可替换或包裹为 `GRDB` Repository
 - `Core/Theme`：统一颜色、字号、阴影、圆角、间距 Token
 - `Features/Today`：Today 页面、新增/编辑弹窗、任务详情二级页
@@ -264,8 +266,46 @@ struct PlanTask: Identifiable, Codable, Equatable {
 说明：
 
 - `PlanTask` 是 Plan 页的一级任务组，可折叠
-- `TodoItem.planTaskID` 指向所属任务组
-- Plan item 与 Today item 是同一条 `TodoItem` 数据，加入 Today 时设置 `isAddedToToday = true` 并更新 `taskDate`
+
+### 6.3 DailyCheckInRecord
+
+```swift
+struct DailyCheckInRecord: Identifiable, Codable, Equatable {
+    let id: UUID
+    var date: Date
+    var createdAt: Date
+    var completedTodoCount: Int
+    var totalTodoCount: Int
+    var focusSeconds: Int
+    var isMakeUp: Bool
+    var sourceTag: String?
+}
+```
+
+说明：
+
+- 当天 `Today` 任务全部完成时，只触发打卡引导，不自动创建打卡记录。
+- 用户点击 `去打卡` 进入打卡页后，必须点击 `完成打卡` 才创建当天 `DailyCheckInRecord`，并在月历上落下当日打卡 icon。
+- 若当天已经打过卡，再次改动完成状态时只刷新已有记录的数据，不重复新增。
+- 打卡记录只面向“自己的坚持”，不接排行榜、社区或外部社交关系。
+- `completedTodoCount / totalTodoCount / focusSeconds` 用于打卡页下方的数据展示与后续分享卡片。
+- `isMakeUp` 标记是否为补签，便于日历上做状态区分。
+- `sourceTag` 仅用于 DEBUG 桩数据标记，清理调试数据时不得误删真实记录。
+
+### 6.3.1 打卡规则
+
+- 仅当 `Today` 当天存在任务且全部完成时，才触发打卡引导。
+- 打卡引导使用居中弹窗，背景轻虚化，底部固定两个按钮：`去打卡` 和 `待会儿再去`。
+- `去打卡` 只打开打卡页，不写入打卡记录。
+- `完成打卡` 是唯一写入当天打卡记录、落下日历 icon 的动作。
+- `待会儿再去` 关闭居中弹窗，但右下角仍保留 `去打卡` 悬浮入口。
+- 新增任务后不会自动撤销当天已打卡结果，已打卡视为当天已完成一次闭环。
+- 第一阶段补签只支持最近缺失的一天，作为低压力入口。
+- 打卡页主结构固定为：月历、果冻打卡主视觉、连续天数、今日数据、底部 CTA。
+- 打卡 icon 使用可配置系列。当前已接入 `涂鸦 Emoji` 系列，6 个素材包，每包 9 个 icon；后续可扩展 `三国噜噜`、`蜡笔鬼灭` 等系列。
+- Set 页提供 `打卡 Icon` 设置项，保存 `seriesID / packID` 到 `AppSettings.checkInIconSelection`。
+- DEBUG 调试浮层提供独立 `打卡` 面板，包含 `Mock 去打卡`、`Mock 已打卡`、30/100/180/365 天打卡桩数据和清理入口。
+- `Mock 去打卡` 只生成“Today 任务已完成但未打卡”的状态；必须手动点 `去打卡 -> 完成打卡` 才会创建记录。
 
 ### 6.3 PomodoroSession
 
@@ -579,13 +619,15 @@ final class AppStore: ObservableObject {
 - item 使用小号 Todo 风格卡片，但不带右滑注水完成动效
 - Plan item 不使用圆形勾选 icon，右侧直接展示周期、每日时长、计时方向等关键信息
 - item 左滑露出 `Today` 胶囊按钮，点击后把该 item 加入 Today
-- 加入 Today 的实现是更新同一条 `TodoItem.isAddedToToday = true` 且 `taskDate = Date()`，Today 与 Plan 数据必须同步
+- 加入 Today 的实现是创建或复用当天执行实例，不直接修改 Plan item 模板
 
 技术要点：
 
-- `PlanTask` 独立存储在 `UserDefaults`
+- `PlanTask` 与 `TodoItem` 持久化在 SQLite 第一阶段表结构中，同时保留 `Codable` 快照备份
 - `TodoItem.planTaskID` 负责关联任务组
-- Plan item 不复制数据到 Today，避免双份状态不同步
+- Plan item 是长期模板；Today item 是某一天的执行实例，通过 `sourceTemplateID` 回溯模板
+- 同一模板同一天只允许存在一个 Today 执行实例，避免重复加入 Today
+- 完成 Today 实例只代表完成当天，不会把 Plan item 模板永久完成
 
 ### 9.3 Set 页面
 
@@ -1018,10 +1060,14 @@ struct JellyCardModifier: ViewModifier {
 - 编辑任务成功并刷新
 - 删除任务成功并重新排序
 - 完成状态切换正常
-- Plan item 左滑加入 Today 后，Today 列表同步出现同一条 item
+- Plan item 左滑加入 Today 后，Today 列表出现当天执行实例，且同一模板当天不会重复生成
 - Set 页设置修改后重启仍生效
 - Pomodoro Stats 页面可正确展示 3D 空状态和按 Plan 聚合后的统计状态
 - 番茄钟不再使用固定 `25/5/15` 时长，计时目标来自任务 `Daily Duration`
+- Today 任务全部完成后出现居中打卡引导；点击 `待会儿再去` 后弹窗关闭且右下角仍可进入打卡
+- 点击 `去打卡` 只进入打卡页；点击打卡页 `完成打卡` 后才创建当天打卡记录并显示日历 icon
+- DEBUG `打卡` 面板的 `Mock 去打卡` 不应直接创建打卡记录
+- Set 页 `打卡 Icon` 切换后，打卡页月历、主视觉和分享卡片应使用当前素材包
 
 ### 14.2 UI 测试
 

@@ -1051,15 +1051,18 @@ async function mergeAppSettings(client, userID, change, payload) {
     `
     INSERT INTO app_settings (
       id, user_id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day,
-      use_large_text, updated_at, server_updated_at
+      use_large_text, text_scale, check_in_icon_series_id, check_in_icon_pack_id, updated_at, server_updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
     ON CONFLICT (id) DO UPDATE SET
       theme_mode = EXCLUDED.theme_mode,
       language = EXCLUDED.language,
       haptics_enabled = EXCLUDED.haptics_enabled,
       pomodoro_goal_per_day = EXCLUDED.pomodoro_goal_per_day,
       use_large_text = EXCLUDED.use_large_text,
+      text_scale = EXCLUDED.text_scale,
+      check_in_icon_series_id = EXCLUDED.check_in_icon_series_id,
+      check_in_icon_pack_id = EXCLUDED.check_in_icon_pack_id,
       updated_at = EXCLUDED.updated_at,
       server_updated_at = now(),
       version = app_settings.version + 1
@@ -1072,6 +1075,9 @@ async function mergeAppSettings(client, userID, change, payload) {
       payload.hapticsEnabled ?? true,
       payload.pomodoroGoalPerDay ?? 4,
       payload.useLargeText ?? true,
+      payload.textScale ?? "medium",
+      payload.checkInIconSeriesID ?? "doodleEmoji",
+      payload.checkInIconPackID ?? "doodle01",
       change.createdAt,
     ]
   );

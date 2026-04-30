@@ -4,6 +4,7 @@ struct StorageSnapshot: Codable, Equatable {
     var todos: [TodoItem]
     var planTasks: [PlanTask]
     var pomodoroSessions: [PomodoroSession]
+    var checkInRecords: [DailyCheckInRecord]
     var profile: UserProfile
     var settings: AppSettings
 }
@@ -17,6 +18,7 @@ struct StorageClient {
         case todos = "todo.items"
         case planTasks = "plan.tasks"
         case pomodoroSessions = "pomodoro.sessions"
+        case checkInRecords = "checkin.records"
         case userProfile = "user.profile"
         case appSettings = "app.settings"
     }
@@ -42,6 +44,7 @@ struct StorageClient {
             todos: load([TodoItem].self, for: .todos) ?? [],
             planTasks: load([PlanTask].self, for: .planTasks) ?? [],
             pomodoroSessions: load([PomodoroSession].self, for: .pomodoroSessions) ?? [],
+            checkInRecords: load([DailyCheckInRecord].self, for: .checkInRecords) ?? [],
             profile: load(UserProfile.self, for: .userProfile) ?? .default,
             settings: load(AppSettings.self, for: .appSettings) ?? .default
         )
