@@ -27,7 +27,7 @@ GitHub 仓库：`1509797225/super-succotash`
 - 存储：SQLite + UserDefaults/Codable 回滚备份
 - 云端：Node.js + PostgreSQL staging API
 - 图表：自绘 Donut / 3D Pie 组件
-- 工程：单 Target 原生 Xcode iOS App
+- 工程：原生 Xcode iOS App + `JellyTodoTests` 单元测试 Target
 
 ## 项目结构
 
@@ -63,6 +63,14 @@ xcodebuild -project JellyTodo.xcodeproj \
   -scheme JellyTodo \
   -destination 'generic/platform=iOS Simulator' \
   build
+```
+
+命令行测试：
+
+```bash
+xcodebuild test -project JellyTodo.xcodeproj \
+  -scheme JellyTodo \
+  -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
 ## 开发原则
