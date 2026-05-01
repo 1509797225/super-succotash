@@ -377,10 +377,17 @@ struct AppSettings: Codable, Equatable {
     var themeMode: AppThemeMode
     var hapticsEnabled: Bool
     var pomodoroGoalPerDay: Int
-    var useLargeText: Bool
+    var textScale: AppTextScale
     var language: AppLanguage
+    var checkInIconSelection: CheckInIconSelection
+    var itemEdgeEffectEnabled: Bool
 }
 ```
+
+视觉设置：
+
+- `itemEdgeEffectEnabled` 由 Set 页开关控制，用于给 item/card 边缘增加轻微高光描边与柔和边界，不改变任务数据和交互逻辑
+- 边缘质感必须通过公共 `JellyCard` modifier 统一实现，禁止页面各自拼装描边
 
 语言设置：
 

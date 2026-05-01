@@ -12,6 +12,10 @@ private struct AppTextScaleKey: EnvironmentKey {
     static let defaultValue: AppTextScale = .medium
 }
 
+private struct AppItemEdgeEffectEnabledKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
 extension EnvironmentValues {
     var appThemeMode: AppThemeMode {
         get { self[AppThemeModeKey.self] }
@@ -26,6 +30,11 @@ extension EnvironmentValues {
     var appTextScale: AppTextScale {
         get { self[AppTextScaleKey.self] }
         set { self[AppTextScaleKey.self] = newValue }
+    }
+
+    var appItemEdgeEffectEnabled: Bool {
+        get { self[AppItemEdgeEffectEnabledKey.self] }
+        set { self[AppItemEdgeEffectEnabledKey.self] = newValue }
     }
 }
 

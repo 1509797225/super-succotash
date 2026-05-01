@@ -8,6 +8,7 @@ enum JellyShadowStyle {
 struct JellyCardModifier: ViewModifier {
     @Environment(\.appThemeMode) private var themeMode
     @Environment(\.appTextScale) private var textScale
+    @Environment(\.appItemEdgeEffectEnabled) private var itemEdgeEffectEnabled
 
     let shadowStyle: JellyShadowStyle
 
@@ -33,6 +34,7 @@ struct JellyCardModifier: ViewModifier {
                     shape
                         .stroke(ThemeTokens.glassStroke(for: themeMode), lineWidth: shadowStyle == .listItem ? 1.1 : 1.35)
                 )
+                .overlay(edgeEffectOverlay(shape: shape))
                 .overlay(alignment: .top) {
                     shape
                         .inset(by: shadowStyle == .listItem ? 10 : 12)
@@ -64,13 +66,34 @@ struct JellyCardModifier: ViewModifier {
             case .standard:
                 shape
                     .fill(ThemeTokens.card(for: themeMode))
+                    .overlay(edgeEffectOverlay(shape: shape))
                     .shadow(color: .white.opacity(0.75), radius: 3, x: -1, y: -1)
                     .shadow(color: .black.opacity(0.08), radius: 5, x: 2, y: 2)
             case .listItem:
                 shape
                     .fill(ThemeTokens.card(for: themeMode))
+                    .overlay(edgeEffectOverlay(shape: shape))
                     .shadow(color: .white.opacity(0.55), radius: 1, x: 0, y: -1)
                     .shadow(color: .black.opacity(0.045), radius: 9, x: 0, y: 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func edgeEffectOverlay(shape: RoundedRectangle) -> some View {
+        if itemEdgeEffectEnabled {
+            if themeMode.isJelly {
+                shape
+                    .stroke(
+                        ThemeTokens.glassStroke(for: themeMode).opacity(0.72),
+                        lineWidth: shadowStyle == .listItem ? 1.15 : 1.05
+                    )
+            } else {
+                shape
+                    .stroke(
+                        ThemeTokens.Colors.subtleLine.opacity(0.95),
+                        lineWidth: shadowStyle == .listItem ? 1.15 : 1.05
+                    )
             }
         }
     }

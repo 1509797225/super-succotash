@@ -1052,6 +1052,37 @@ struct SetView: View {
 
             settingDivider
 
+            HStack(spacing: 14) {
+                settingIcon(systemName: "squareshape.split.2x2")
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(backupText(english: "Edge Detail", chinese: "边缘质感"))
+                        .font(settingFont)
+                        .foregroundStyle(ThemeTokens.Colors.textPrimary)
+
+                    Text(backupText(english: "Subtle highlight for item edges", chinese: "给 item 增加轻微高光描边"))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(ThemeTokens.Colors.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { store.settings.itemEdgeEffectEnabled },
+                    set: { newValue in
+                        var updated = store.settings
+                        updated.itemEdgeEffectEnabled = newValue
+                        store.updateSettings(updated)
+                    }
+                ))
+                .labelsHidden()
+                .tint(currentAccent)
+            }
+            .settingRowFrame()
+
+            settingDivider
+
             Button {
                 showingAppIconPicker = true
             } label: {

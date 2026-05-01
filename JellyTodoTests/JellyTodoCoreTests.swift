@@ -18,7 +18,8 @@ final class JellyTodoCoreTests: XCTestCase {
             pomodoroGoalPerDay: 6,
             textScale: .large,
             language: .chinese,
-            checkInIconSelection: CheckInIconSelection(seriesID: "doodleEmoji", packID: "doodle06")
+            checkInIconSelection: CheckInIconSelection(seriesID: "doodleEmoji", packID: "doodle06"),
+            itemEdgeEffectEnabled: true
         )
 
         let data = try JSONEncoder().encode(settings)
@@ -28,6 +29,7 @@ final class JellyTodoCoreTests: XCTestCase {
         XCTAssertEqual(decoded.textScale, .large)
         XCTAssertEqual(decoded.language, .chinese)
         XCTAssertEqual(decoded.checkInIconSelection, settings.checkInIconSelection)
+        XCTAssertTrue(decoded.itemEdgeEffectEnabled)
     }
 
     func testCheckInIconCatalogFallsBackToDefaultPack() {

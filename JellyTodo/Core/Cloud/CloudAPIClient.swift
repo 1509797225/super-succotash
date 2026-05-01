@@ -274,6 +274,7 @@ struct CloudAppSettings: Decodable, Equatable {
     let pomodoroGoalPerDay: Int
     let textScale: AppTextScale?
     let checkInIconSelection: CheckInIconSelection?
+    let itemEdgeEffectEnabled: Bool?
     let updatedAt: Date
 
     private enum CodingKeys: String, CodingKey {
@@ -285,6 +286,7 @@ struct CloudAppSettings: Decodable, Equatable {
         case useLargeText = "use_large_text"
         case checkInIconSeriesID = "check_in_icon_series_id"
         case checkInIconPackID = "check_in_icon_pack_id"
+        case itemEdgeEffectEnabled = "item_edge_effect_enabled"
         case updatedAt = "updated_at"
     }
 
@@ -307,6 +309,7 @@ struct CloudAppSettings: Decodable, Equatable {
         } else {
             checkInIconSelection = nil
         }
+        itemEdgeEffectEnabled = try container.decodeIfPresent(Bool.self, forKey: .itemEdgeEffectEnabled)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
     }
 }

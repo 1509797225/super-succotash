@@ -109,9 +109,9 @@ export async function seedDebugData(levelName = "basic") {
       `
       INSERT INTO app_settings (
         id, user_id, theme_mode, language, haptics_enabled,
-        pomodoro_goal_per_day, use_large_text, updated_at
+        pomodoro_goal_per_day, use_large_text, item_edge_effect_enabled, updated_at
       )
-      VALUES ($1, $2, $3, $4, true, $5, true, $6)
+      VALUES ($1, $2, $3, $4, true, $5, true, false, $6)
       `,
       [randomUUID(), DEBUG_USER_ID, "pureWhite", "chinese", 8, iso(now)]
     );

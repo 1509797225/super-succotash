@@ -61,6 +61,7 @@ struct JellyTodoApp: App {
                 .environment(\.appThemeMode, store.settings.themeMode)
                 .environment(\.appLanguage, store.settings.language)
                 .environment(\.appTextScale, store.settings.textScale)
+                .environment(\.appItemEdgeEffectEnabled, store.settings.itemEdgeEffectEnabled)
                 .environment(\.locale, Locale(identifier: store.settings.language.localeIdentifier))
                 .preferredColorScheme(store.preferredColorScheme)
                 .background(ThemeTokens.background(for: store.settings.themeMode).ignoresSafeArea())

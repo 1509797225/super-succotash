@@ -149,6 +149,7 @@ export async function initSchema() {
       text_scale TEXT NOT NULL DEFAULT 'medium',
       check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji',
       check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01',
+      item_edge_effect_enabled BOOLEAN NOT NULL DEFAULT false,
       updated_at TIMESTAMPTZ NOT NULL,
       server_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       version INTEGER NOT NULL DEFAULT 1
@@ -205,6 +206,7 @@ export async function initSchema() {
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS text_scale TEXT NOT NULL DEFAULT 'medium';
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji';
       ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01';
+      ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS item_edge_effect_enabled BOOLEAN NOT NULL DEFAULT false;
 	  `);
 }
 

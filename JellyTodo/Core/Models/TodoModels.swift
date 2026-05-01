@@ -1004,6 +1004,7 @@ struct AppSettings: Codable, Equatable {
     var textScale: AppTextScale
     var language: AppLanguage
     var checkInIconSelection: CheckInIconSelection
+    var itemEdgeEffectEnabled: Bool
 
     static let `default` = AppSettings(
         themeMode: .blackWhite,
@@ -1011,7 +1012,8 @@ struct AppSettings: Codable, Equatable {
         pomodoroGoalPerDay: 4,
         textScale: .medium,
         language: .english,
-        checkInIconSelection: .default
+        checkInIconSelection: .default,
+        itemEdgeEffectEnabled: false
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -1023,6 +1025,7 @@ struct AppSettings: Codable, Equatable {
         case language
         case checkInIconSeriesID
         case checkInIconPackID
+        case itemEdgeEffectEnabled
     }
 
     init(
@@ -1031,7 +1034,8 @@ struct AppSettings: Codable, Equatable {
         pomodoroGoalPerDay: Int,
         textScale: AppTextScale,
         language: AppLanguage,
-        checkInIconSelection: CheckInIconSelection
+        checkInIconSelection: CheckInIconSelection,
+        itemEdgeEffectEnabled: Bool = false
     ) {
         self.themeMode = themeMode
         self.hapticsEnabled = hapticsEnabled
@@ -1039,6 +1043,7 @@ struct AppSettings: Codable, Equatable {
         self.textScale = textScale
         self.language = language
         self.checkInIconSelection = checkInIconSelection
+        self.itemEdgeEffectEnabled = itemEdgeEffectEnabled
     }
 
     init(from decoder: Decoder) throws {
@@ -1056,6 +1061,7 @@ struct AppSettings: Codable, Equatable {
         let seriesID = try container.decodeIfPresent(String.self, forKey: .checkInIconSeriesID) ?? CheckInIconSelection.default.seriesID
         let packID = try container.decodeIfPresent(String.self, forKey: .checkInIconPackID) ?? CheckInIconSelection.default.packID
         checkInIconSelection = CheckInIconSelection(seriesID: seriesID, packID: packID)
+        itemEdgeEffectEnabled = try container.decodeIfPresent(Bool.self, forKey: .itemEdgeEffectEnabled) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -1068,6 +1074,7 @@ struct AppSettings: Codable, Equatable {
         try container.encode(language, forKey: .language)
         try container.encode(checkInIconSelection.seriesID, forKey: .checkInIconSeriesID)
         try container.encode(checkInIconSelection.packID, forKey: .checkInIconPackID)
+        try container.encode(itemEdgeEffectEnabled, forKey: .itemEdgeEffectEnabled)
     }
 }
 

@@ -1710,7 +1710,8 @@ final class AppStore: ObservableObject {
                 pomodoroGoalPerDay: cloudSettings.pomodoroGoalPerDay,
                 textScale: cloudSettings.textScale ?? settings.textScale,
                 language: cloudSettings.language,
-                checkInIconSelection: cloudSettings.checkInIconSelection ?? settings.checkInIconSelection
+                checkInIconSelection: cloudSettings.checkInIconSelection ?? settings.checkInIconSelection,
+                itemEdgeEffectEnabled: cloudSettings.itemEdgeEffectEnabled ?? settings.itemEdgeEffectEnabled
             )
             if settings != merged {
                 settings = merged

@@ -424,6 +424,7 @@ struct DatabaseClient {
               text_scale TEXT NOT NULL DEFAULT 'medium',
               check_in_icon_series_id TEXT NOT NULL DEFAULT 'doodleEmoji',
               check_in_icon_pack_id TEXT NOT NULL DEFAULT 'doodle01',
+              item_edge_effect_enabled INTEGER NOT NULL DEFAULT 0,
               updated_at TEXT NOT NULL
             );
 
@@ -486,6 +487,7 @@ struct DatabaseClient {
         try addColumnIfMissing("text_scale", definition: "TEXT NOT NULL DEFAULT 'medium'", to: "app_settings", in: database)
         try addColumnIfMissing("check_in_icon_series_id", definition: "TEXT NOT NULL DEFAULT 'doodleEmoji'", to: "app_settings", in: database)
         try addColumnIfMissing("check_in_icon_pack_id", definition: "TEXT NOT NULL DEFAULT 'doodle01'", to: "app_settings", in: database)
+        try addColumnIfMissing("item_edge_effect_enabled", definition: "INTEGER NOT NULL DEFAULT 0", to: "app_settings", in: database)
     }
 
     private func migrateLegacyIfNeeded(_ legacySnapshot: StorageSnapshot, in database: OpaquePointer) throws {
@@ -618,7 +620,7 @@ struct DatabaseClient {
     private func readSettings(from database: OpaquePointer) throws -> AppSettings {
         let result = try rows(
             sql: """
-            SELECT theme_mode, haptics_enabled, pomodoro_goal_per_day, use_large_text, language, text_scale, check_in_icon_series_id, check_in_icon_pack_id
+            SELECT theme_mode, haptics_enabled, pomodoro_goal_per_day, use_large_text, language, text_scale, check_in_icon_series_id, check_in_icon_pack_id, item_edge_effect_enabled
             FROM app_settings
             WHERE id = 'current'
             LIMIT 1;
@@ -634,7 +636,8 @@ struct DatabaseClient {
                 checkInIconSelection: CheckInIconSelection(
                     seriesID: string(column: 6, statement: statement).isEmpty ? CheckInIconSelection.default.seriesID : string(column: 6, statement: statement),
                     packID: string(column: 7, statement: statement).isEmpty ? CheckInIconSelection.default.packID : string(column: 7, statement: statement)
-                )
+                ),
+                itemEdgeEffectEnabled: bool(column: 8, statement: statement)
             )
         }
         return result.first ?? .default
@@ -816,9 +819,9 @@ struct DatabaseClient {
         try run(
             sql: """
             INSERT OR REPLACE INTO app_settings (
-              id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day, use_large_text, text_scale, check_in_icon_series_id, check_in_icon_pack_id, updated_at
+              id, theme_mode, language, haptics_enabled, pomodoro_goal_per_day, use_large_text, text_scale, check_in_icon_series_id, check_in_icon_pack_id, item_edge_effect_enabled, updated_at
             )
-            VALUES ('current', ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            VALUES ('current', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
             """,
             in: database
         ) { statement in
@@ -830,7 +833,8 @@ struct DatabaseClient {
             bind(settings.textScale.rawValue, at: 6, statement: statement)
             bind(settings.checkInIconSelection.seriesID, at: 7, statement: statement)
             bind(settings.checkInIconSelection.packID, at: 8, statement: statement)
-            bind(Date().databaseString, at: 9, statement: statement)
+            bind(settings.itemEdgeEffectEnabled, at: 9, statement: statement)
+            bind(Date().databaseString, at: 10, statement: statement)
         }
     }
 
