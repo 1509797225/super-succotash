@@ -451,6 +451,42 @@ struct PlanTask: Identifiable, Codable, Equatable {
     let createdAt: Date
     var updatedAt: Date
     var isCollapsed: Bool
+    var isArchived: Bool
+
+    init(
+        id: UUID,
+        title: String,
+        createdAt: Date,
+        updatedAt: Date,
+        isCollapsed: Bool,
+        isArchived: Bool = false
+    ) {
+        self.id = id
+        self.title = title
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.isCollapsed = isCollapsed
+        self.isArchived = isArchived
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case title
+        case createdAt
+        case updatedAt
+        case isCollapsed
+        case isArchived
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        isCollapsed = try container.decodeIfPresent(Bool.self, forKey: .isCollapsed) ?? false
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+    }
 }
 
 struct DailyCheckInRecord: Identifiable, Codable, Equatable {
@@ -1318,6 +1354,24 @@ struct PlanTaskSection: Identifiable, Equatable {
     var id: UUID { task.id }
     let task: PlanTask
     let items: [TodoItem]
+}
+
+struct PlanProgress: Equatable {
+    let totalItems: Int
+    let todayItems: Int
+    let completedTodayItems: Int
+    let weeklyFocusSeconds: Int
+
+    var todayCompletionRate: Double {
+        guard todayItems > 0 else { return 0 }
+        return Double(completedTodayItems) / Double(todayItems)
+    }
+}
+
+enum PlanAddTodayResult: Equatable {
+    case added
+    case alreadyExists
+    case missing
 }
 
 struct PlanItemTodayState: Equatable {

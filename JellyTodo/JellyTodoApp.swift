@@ -69,6 +69,7 @@ struct JellyTodoApp: App {
                 }
                 .onChange(of: scenePhase) { phase in
                     guard phase == .active else { return }
+                    store.reconcileRunningPomodoro()
                     store.materializeTodayOccurrencesIfNeeded()
                     Task {
                         await store.performForegroundAutoSyncIfNeeded()

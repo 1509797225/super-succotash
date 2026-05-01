@@ -151,6 +151,7 @@ struct CloudPlan: Decodable, Equatable {
     let id: UUID
     let title: String
     let isCollapsed: Bool
+    let isArchived: Bool
     let createdAt: Date
     let updatedAt: Date
     let deletedAt: Date?
@@ -159,9 +160,21 @@ struct CloudPlan: Decodable, Equatable {
         case id
         case title
         case isCollapsed = "is_collapsed"
+        case isArchived = "is_archived"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case deletedAt = "deleted_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        isCollapsed = try container.decodeIfPresent(Bool.self, forKey: .isCollapsed) ?? false
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        deletedAt = try container.decodeIfPresent(Date.self, forKey: .deletedAt)
     }
 }
 

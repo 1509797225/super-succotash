@@ -88,6 +88,7 @@ final class AppStore: ObservableObject {
 
     var planSections: [PlanTaskSection] {
         planTasks
+            .filter { !$0.isArchived }
             .sorted { $0.createdAt < $1.createdAt }
             .map { task in
                 PlanTaskSection(
@@ -203,6 +204,46 @@ final class AppStore: ObservableObject {
         logCloudChange(entityType: "plan", entityID: planTask.id.uuidString, operation: "create", payload: planTask)
     }
 
+    func updatePlanTask(id: UUID, title: String) {
+        let trimmed = sanitize(title)
+        guard !trimmed.isEmpty, let index = planTasks.firstIndex(where: { $0.id == id }) else { return }
+
+        planTasks[index].title = trimmed
+        planTasks[index].updatedAt = Date()
+        savePlanTasks()
+        logCloudChange(entityType: "plan", entityID: id.uuidString, operation: "update", payload: planTasks[index])
+    }
+
+    func archivePlanTask(id: UUID) {
+        guard let index = planTasks.firstIndex(where: { $0.id == id }) else { return }
+
+        planTasks[index].isArchived = true
+        planTasks[index].updatedAt = Date()
+        savePlanTasks()
+        logCloudChange(entityType: "plan", entityID: id.uuidString, operation: "update", payload: planTasks[index])
+    }
+
+    func deletePlanTask(id: UUID) {
+        guard let payload = planTasks.first(where: { $0.id == id }) else { return }
+        let templateIDs = Set(todos.filter { $0.planTaskID == id && $0.isPlanTemplate }.map(\.id))
+        let removedTodos = todos.filter { todo in
+            todo.planTaskID == id || todo.sourceTemplateID.map { templateIDs.contains($0) } == true
+        }
+
+        planTasks.removeAll { $0.id == id }
+        todos.removeAll { todo in
+            todo.planTaskID == id || todo.sourceTemplateID.map { templateIDs.contains($0) } == true
+        }
+
+        savePlanTasks()
+        saveTodos()
+        evaluateTodayCheckIn()
+        logCloudChange(entityType: "plan", entityID: id.uuidString, operation: "delete", payload: payload)
+        for todo in removedTodos {
+            logCloudChange(entityType: "todo_item", entityID: todo.id.uuidString, operation: "delete", payload: todo)
+        }
+    }
+
     func addPlanItem(
         title: String,
         to planTaskID: UUID,
@@ -249,12 +290,15 @@ final class AppStore: ObservableObject {
         logCloudChange(entityType: "plan", entityID: id.uuidString, operation: "update", payload: planTasks[index])
     }
 
-    func addTodoToToday(id: UUID) {
-        guard let template = todos.first(where: { $0.id == id }) else { return }
+    @discardableResult
+    func addTodoToToday(id: UUID) -> PlanAddTodayResult {
+        guard let template = todos.first(where: { $0.id == id }) else { return .missing }
+        let wasAlreadyAdded = todayOccurrence(for: template) != nil
         let result = upsertTodayOccurrence(from: template, now: Date())
         triggerHaptic()
         saveTodos()
         logCloudChange(entityType: "todo_item", entityID: result.todo.id.uuidString, operation: result.operation, payload: result.todo)
+        return wasAlreadyAdded ? .alreadyExists : .added
     }
 
     func prepareFocusTodoID(for id: UUID) -> UUID {
@@ -443,6 +487,8 @@ final class AppStore: ObservableObject {
 
     func pausePomodoro() {
         guard timerState.isRunning else { return }
+        reconcileRunningPomodoro()
+        guard timerState.isRunning else { return }
         timerCancellable?.cancel()
         timerState.isRunning = false
         timerState.isPaused = true
@@ -451,6 +497,7 @@ final class AppStore: ObservableObject {
 
     func resumePomodoro() {
         guard timerState.isPaused else { return }
+        timerState.startedAt = Date().addingTimeInterval(-Double(timerState.elapsedSeconds))
         timerState.isRunning = true
         timerState.isPaused = false
         beginTicking()
@@ -468,6 +515,7 @@ final class AppStore: ObservableObject {
     }
 
     func completePomodoro() {
+        reconcilePomodoroClock(shouldComplete: false)
         timerCancellable?.cancel()
 
         let now = Date()
@@ -495,6 +543,10 @@ final class AppStore: ObservableObject {
         resetTimer(for: .focus)
 
         triggerHaptic()
+    }
+
+    func reconcileRunningPomodoro(now: Date = Date()) {
+        reconcilePomodoroClock(now: now, shouldComplete: true)
     }
 
     func updateProfile(_ profile: UserProfile) {
@@ -1147,6 +1199,29 @@ final class AppStore: ObservableObject {
             .reduce(0) { $0 + $1.durationSeconds }
     }
 
+    func planProgress(for section: PlanTaskSection) -> PlanProgress {
+        let templateIDs = Set(section.items.map(\.id))
+        let todayOccurrences = todos.filter { todo in
+            todo.sourceTemplateID.map { templateIDs.contains($0) } == true
+                && Calendar.current.isDateInToday(todo.taskDate)
+        }
+        let weekStart = Calendar.current.dateInterval(of: .weekOfYear, for: Date())?.start ?? Date()
+        let weeklyFocusSeconds = pomodoroSessions
+            .filter { session in
+                session.type == .focus
+                    && session.endAt >= weekStart
+                    && session.sourceTemplateID.map { templateIDs.contains($0) } == true
+            }
+            .reduce(0) { $0 + $1.durationSeconds }
+
+        return PlanProgress(
+            totalItems: section.items.count,
+            todayItems: todayOccurrences.count,
+            completedTodayItems: todayOccurrences.filter(\.isCompleted).count,
+            weeklyFocusSeconds: weeklyFocusSeconds
+        )
+    }
+
     func todayTaskFocusSummaries() -> [TaskFocusSummary] {
         let todayFocusSessions = pomodoroSessions.filter {
             $0.type == .focus && $0.relatedTodoID != nil && Calendar.current.isDateInToday($0.endAt)
@@ -1472,7 +1547,8 @@ final class AppStore: ObservableObject {
                     title: $0.title,
                     createdAt: $0.createdAt,
                     updatedAt: $0.updatedAt,
-                    isCollapsed: $0.isCollapsed
+                    isCollapsed: $0.isCollapsed,
+                    isArchived: $0.isArchived
                 )
             }
 
@@ -1545,7 +1621,8 @@ final class AppStore: ObservableObject {
                 title: cloudPlan.title,
                 createdAt: cloudPlan.createdAt,
                 updatedAt: cloudPlan.updatedAt,
-                isCollapsed: cloudPlan.isCollapsed
+                isCollapsed: cloudPlan.isCollapsed,
+                isArchived: cloudPlan.isArchived
             )
 
             if let index = planTasks.firstIndex(where: { $0.id == cloudPlan.id }) {
@@ -1686,27 +1763,20 @@ final class AppStore: ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self else { return }
-                guard self.timerState.isRunning else { return }
-
-                switch self.timerState.direction {
-                case .countDown:
-                    if self.timerState.remainingSeconds > 0 {
-                        self.timerState.remainingSeconds -= 1
-                        self.timerState.elapsedSeconds = self.timerState.totalSeconds - self.timerState.remainingSeconds
-                    }
-                case .countUp:
-                    if self.timerState.elapsedSeconds < self.timerState.totalSeconds {
-                        self.timerState.elapsedSeconds += 1
-                        self.timerState.remainingSeconds = max(self.timerState.totalSeconds - self.timerState.elapsedSeconds, 0)
-                    }
-                }
-
-                if self.timerState.direction == .countDown, self.timerState.remainingSeconds <= 0 {
-                    self.completePomodoro()
-                } else if self.timerState.direction == .countUp, self.timerState.elapsedSeconds >= self.timerState.totalSeconds {
-                    self.completePomodoro()
-                }
+                self.reconcileRunningPomodoro()
             }
+    }
+
+    private func reconcilePomodoroClock(now: Date = Date(), shouldComplete: Bool) {
+        guard timerState.isRunning, let startedAt = timerState.startedAt else { return }
+
+        let rawElapsed = max(Int(now.timeIntervalSince(startedAt)), 0)
+        let elapsed = min(rawElapsed, max(timerState.totalSeconds, 0))
+        timerState.elapsedSeconds = elapsed
+        timerState.remainingSeconds = max(timerState.totalSeconds - elapsed, 0)
+
+        guard shouldComplete, elapsed >= timerState.totalSeconds, timerState.totalSeconds > 0 else { return }
+        completePomodoro()
     }
 
     private func resetTimer(for mode: PomodoroTimerMode) {
@@ -1879,6 +1949,13 @@ final class AppStore: ObservableObject {
         )
         todos.append(occurrence)
         return (occurrence, "create")
+    }
+
+    private func todayOccurrence(for template: TodoItem) -> TodoItem? {
+        let calendar = Calendar.current
+        return todos.first {
+            $0.sourceTemplateID == template.id && calendar.isDateInToday($0.taskDate)
+        }
     }
 
     private func sanitizedNote(_ note: String) -> String {

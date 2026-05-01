@@ -934,12 +934,13 @@ async function mergePlan(client, userID, deviceID, change, payload) {
   await client.query(
     `
     INSERT INTO plans (
-      id, user_id, device_id, title, is_collapsed, created_at, updated_at, server_updated_at
+      id, user_id, device_id, title, is_collapsed, is_archived, created_at, updated_at, server_updated_at
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
     ON CONFLICT (id) DO UPDATE SET
       title = EXCLUDED.title,
       is_collapsed = EXCLUDED.is_collapsed,
+      is_archived = EXCLUDED.is_archived,
       updated_at = EXCLUDED.updated_at,
       deleted_at = NULL,
       server_updated_at = now(),
@@ -951,6 +952,7 @@ async function mergePlan(client, userID, deviceID, change, payload) {
       deviceID,
       payload.title ?? "Untitled",
       Boolean(payload.isCollapsed),
+      Boolean(payload.isArchived),
       payload.createdAt ?? change.createdAt,
       payload.updatedAt ?? change.createdAt,
     ]

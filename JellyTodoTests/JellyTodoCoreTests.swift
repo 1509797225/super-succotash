@@ -63,4 +63,44 @@ final class JellyTodoCoreTests: XCTestCase {
         ])
         XCTAssertEqual(item.scheduleMode, .custom)
     }
+
+    func testPlanTaskDecodesLegacyPayloadAsNotArchived() throws {
+        struct LegacyPlanTask: Encodable {
+            let id: UUID
+            let title: String
+            let createdAt: Date
+            let updatedAt: Date
+            let isCollapsed: Bool
+        }
+
+        let legacy = LegacyPlanTask(
+            id: UUID(),
+            title: "Postgraduate Exam",
+            createdAt: Date(timeIntervalSinceReferenceDate: 100),
+            updatedAt: Date(timeIntervalSinceReferenceDate: 200),
+            isCollapsed: true
+        )
+
+        let data = try JSONEncoder().encode(legacy)
+        let decoded = try JSONDecoder().decode(PlanTask.self, from: data)
+
+        XCTAssertEqual(decoded.title, legacy.title)
+        XCTAssertTrue(decoded.isCollapsed)
+        XCTAssertFalse(decoded.isArchived)
+    }
+
+    @MainActor
+    func testPomodoroReconcileUsesWallClockElapsed() {
+        let store = AppStore()
+        let now = Date(timeIntervalSinceReferenceDate: 1_000)
+
+        store.startPomodoro(mode: .focus, durationSeconds: 120, direction: .countDown)
+        store.timerState.startedAt = now.addingTimeInterval(-45)
+        store.reconcileRunningPomodoro(now: now)
+
+        XCTAssertEqual(store.timerState.elapsedSeconds, 45)
+        XCTAssertEqual(store.timerState.remainingSeconds, 75)
+
+        store.stopPomodoro(discard: true)
+    }
 }

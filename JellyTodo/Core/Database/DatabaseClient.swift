@@ -365,6 +365,7 @@ struct DatabaseClient {
               updated_at TEXT NOT NULL,
               deleted_at TEXT,
               is_collapsed INTEGER NOT NULL DEFAULT 0,
+              is_archived INTEGER NOT NULL DEFAULT 0,
               sort_order INTEGER NOT NULL DEFAULT 0
             );
 
@@ -477,6 +478,7 @@ struct DatabaseClient {
         try addColumnIfMissing("schedule_mode", definition: "TEXT NOT NULL DEFAULT 'custom'", to: "todo_items", in: database)
         try addColumnIfMissing("recurrence_value", definition: "INTEGER", to: "todo_items", in: database)
         try addColumnIfMissing("scheduled_dates", definition: "TEXT NOT NULL DEFAULT '[]'", to: "todo_items", in: database)
+        try addColumnIfMissing("is_archived", definition: "INTEGER NOT NULL DEFAULT 0", to: "plans", in: database)
         try addColumnIfMissing("source_template_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("plan_id", definition: "TEXT", to: "pomodoro_sessions", in: database)
         try addColumnIfMissing("plan_title_snapshot", definition: "TEXT NOT NULL DEFAULT ''", to: "pomodoro_sessions", in: database)
@@ -527,7 +529,7 @@ struct DatabaseClient {
 
     private func readPlanTasks(from database: OpaquePointer) throws -> [PlanTask] {
         try rows(
-            sql: "SELECT id, title, created_at, updated_at, is_collapsed FROM plans WHERE deleted_at IS NULL ORDER BY created_at ASC;",
+            sql: "SELECT id, title, created_at, updated_at, is_collapsed, is_archived FROM plans WHERE deleted_at IS NULL ORDER BY created_at ASC;",
             in: database
         ) { statement in
             PlanTask(
@@ -535,7 +537,8 @@ struct DatabaseClient {
                 title: string(column: 1, statement: statement),
                 createdAt: date(column: 2, statement: statement),
                 updatedAt: date(column: 3, statement: statement),
-                isCollapsed: bool(column: 4, statement: statement)
+                isCollapsed: bool(column: 4, statement: statement),
+                isArchived: bool(column: 5, statement: statement)
             )
         }
     }
@@ -708,8 +711,8 @@ struct DatabaseClient {
     private func replacePlanTasks(_ planTasks: [PlanTask], in database: OpaquePointer) throws {
         try execute("DELETE FROM plans;", in: database)
         let sql = """
-        INSERT INTO plans (id, title, created_at, updated_at, deleted_at, is_collapsed, sort_order)
-        VALUES (?, ?, ?, ?, NULL, ?, ?);
+        INSERT INTO plans (id, title, created_at, updated_at, deleted_at, is_collapsed, is_archived, sort_order)
+        VALUES (?, ?, ?, ?, NULL, ?, ?, ?);
         """
 
         for (index, task) in planTasks.enumerated() {
@@ -719,7 +722,8 @@ struct DatabaseClient {
                 bind(task.createdAt.databaseString, at: 3, statement: statement)
                 bind(task.updatedAt.databaseString, at: 4, statement: statement)
                 bind(task.isCollapsed, at: 5, statement: statement)
-                bind(index, at: 6, statement: statement)
+                bind(task.isArchived, at: 6, statement: statement)
+                bind(index, at: 7, statement: statement)
             }
         }
     }

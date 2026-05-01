@@ -260,12 +260,14 @@ struct PlanTask: Identifiable, Codable, Equatable {
     let createdAt: Date
     var updatedAt: Date
     var isCollapsed: Bool
+    var isArchived: Bool
 }
 ```
 
 说明：
 
 - `PlanTask` 是 Plan 页的一级任务组，可折叠
+- `isArchived` 用于把计划从 Plan 主列表隐藏，历史专注统计继续依赖 `PomodoroSession` 快照展示，不因归档而丢失
 
 ### 6.3 DailyCheckInRecord
 
@@ -610,17 +612,21 @@ final class AppStore: ObservableObject {
 - 若任务计时方向为 `Count Up`：从 `00:00` 正计时至 `dailyDurationMinutes`
 - 任务时长由任务编辑弹窗维护；番茄钟本身不提供 `25/5/15` 固定时长配置
 - 默认方向为 `Count Down`
+- 计时状态必须基于真实时间差校准，进入前台、恢复运行和每秒刷新时都用 `startedAt` 与当前时间重算，避免后台/锁屏导致少计
 
 ### 9.2 Plan 页面
 
 - 第一个底部 Tab 固定为 `Plan`，不再是 `Month`
 - Plan 页展示一级任务组 `PlanTask`
 - 每个任务组可折叠/展开
+- 每个任务组支持编辑标题、归档、删除；归档从主列表隐藏，删除会同时移除该计划下模板 item 与已生成的 Today 执行实例
+- 每个任务组头部展示关键进度：Today 完成数、本周专注时长、总 item 数
 - 任务组下可新增 item；新增 item 使用和 Today 任务一致的完整编辑弹窗，必须支持任务标题、周期、每日时长、计时方向
 - item 使用小号 Todo 风格卡片，但不带右滑注水完成动效
 - Plan item 不使用圆形勾选 icon，右侧直接展示周期、每日时长、计时方向等关键信息
 - item 左滑露出 `Today` 胶囊按钮，点击后把该 item 加入 Today
 - 加入 Today 的实现是创建或复用当天执行实例，不直接修改 Plan item 模板
+- 加入 Today 必须给用户反馈：新增成功、当天已存在或 item 不存在
 
 技术要点：
 

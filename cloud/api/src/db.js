@@ -81,6 +81,7 @@ export async function initSchema() {
       device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
       title TEXT NOT NULL,
       is_collapsed BOOLEAN NOT NULL DEFAULT false,
+      is_archived BOOLEAN NOT NULL DEFAULT false,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL,
@@ -194,6 +195,7 @@ export async function initSchema() {
 	    ALTER TABLE devices ADD COLUMN IF NOT EXISTS auth_user_id TEXT REFERENCES users(id) ON DELETE SET NULL;
 	    ALTER TABLE devices ADD COLUMN IF NOT EXISTS anonymous_user_id TEXT;
 	  ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS source_template_id TEXT REFERENCES todo_items(id) ON DELETE SET NULL;
+      ALTER TABLE plans ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT false;
 	  ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS schedule_mode TEXT NOT NULL DEFAULT 'custom';
 	  ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS recurrence_value INTEGER;
 	  ALTER TABLE todo_items ADD COLUMN IF NOT EXISTS scheduled_dates JSONB NOT NULL DEFAULT '[]'::jsonb;
